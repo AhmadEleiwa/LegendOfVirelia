@@ -1,0 +1,10 @@
+{
+  "mainClass": "org.legendofvirelia.Main",
+  "gameJar": "../libs/LegendOfVirelia-1.0-SNAPSHOT.jar",
+  "libFolder": "../lib",
+  "nativesFolder": "natives",
+  "jvmArgs": [
+    "-Xmx2G",
+    "-DsomeOption=true"
+  ]
+}
