@@ -1,5 +1,6 @@
 package org.engine.rendering;
 
+import org.engine.utils.Debug;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
 import org.game.meshes.Model;
@@ -46,9 +47,9 @@ public class Renderer {
 
         for (GameObject obj : objects) {
 
-            if (!culler.isVisible(obj.position, 1.0f)) {
-                continue; // culled
-            }
+            // if (!culler.isVisible(obj.position, 1.0f)) {
+            //     continue; // culled
+            // }
 
             Matrix4f modelMatrix = obj.getModelMatrix();
             modelMatrix.get(matrixBuffer);
@@ -58,10 +59,15 @@ public class Renderer {
 
                 if (model != null)
                     model.draw();
+                else{
+                    Debug.log("hi");
+                }
             }
             // Clean up by unbinding the texture (optional but good practice)
             glBindTexture(GL_TEXTURE_2D, 0);
+            shader.stop();
         }
+    
     }
 
     public void render(Model model, Camera camera, Vector3f position, Vector3f center, float radius) {
@@ -78,6 +84,7 @@ public class Renderer {
         glUniformMatrix4fv(uniView, false, matrixBuffer);
 
         if(!culler.isVisible(center, radius)){
+            shader.stop();
             return;
         }
         
@@ -93,6 +100,7 @@ public class Renderer {
 
         // Clean up by unbinding the texture (optional but good practice)
         glBindTexture(GL_TEXTURE_2D, 0);
+        shader.stop();
     }
 
     

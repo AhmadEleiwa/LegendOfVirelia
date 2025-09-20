@@ -1,5 +1,6 @@
 // org/legendofvirelia/client/ClientGameLogic.java
 package org.legendofvirelia.client;
+
 import static org.lwjgl.opengl.GL11.*;
 
 import java.io.IOException;
@@ -10,208 +11,188 @@ import org.engine.io.Window;
 import org.engine.loop.ClientSide;
 import org.engine.rendering.Renderer;
 import org.engine.rendering.ShaderProgram;
+import org.engine.rendering.UIRenderer;
 import org.engine.utils.Debug;
 import org.engine.utils.Logger;
 import org.engine.utils.Resource;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
+import org.game.ui.ColorRect;
+import org.game.ui.Container;
 import org.game.utils.AtlasBuilder;
 import org.game.world.Block;
 import org.game.world.BlockPlacer;
 import org.game.world.BlockRegistry;
 import org.game.world.Blocks;
-import org.game.world.World;
-import org.joml.Vector3i;
-
-import org.legendofvirelia.shared.WorldState;
+import org.legendofvirelia.shared.ClientWorldState;
+import org.legendofvirelia.shared.commands.PlaceBlockCommand;
 
 public class ClientGameLogic implements ClientSide {
 
-    private final WorldState worldState;
-    private List<GameObject> objects;
+    private final ClientWorldState worldState;
     private Renderer renderer;
-    private Camera camera = new Camera(800f / 600f); // aspect ratio
-    private World world;
-    private BlockPlacer blockPlacer;
+    private UIRenderer uiRenderer;
+    private Camera camera = new Camera(800f / 600f);
     public float timer = 0;
-    public float cooldown = 10;
- 
+    public float cooldown = 0.1f; // Fast response for building
+    private List<GameObject> objects;
+    private Container ui;
     // Building system state
-    private int selectedBlockId = 1; // Default to dirt
-    private boolean buildMode = true; // true = place blocks, false = break blocks
-    public ClientGameLogic(WorldState state){
+    private int selectedBlockId = 1;
+    private boolean buildMode = true;
+    ShaderProgram uishader;
+
+    public ClientGameLogic(ClientWorldState state) {
         this.worldState = state;
     }
+
     @Override
     public void init() {
-        // Load resources, initialize objects
-
         var vs = Resource.loadText("shaders/cube.vert");
         var fs = Resource.loadText("shaders/cube.frag");
-        Debug.log("initil;ization");
+        Debug.log("Client initialization");
+        var uiv = Resource.loadText("shaders/ui.vert");
+        var uif = Resource.loadText("shaders/ui.frag");
         try {
-             AtlasBuilder atlas = AtlasBuilder.create("assets/textures",1600, 16);
-             Debug.log("Atlas UVs: " + atlas.getAllUVs().keySet());
+            AtlasBuilder atlas = AtlasBuilder.create("assets/textures", 1600, 16);
+            Debug.log("Atlas UVs: " + atlas.getAllUVs().keySet());
         } catch (IOException e) {
             Logger.log("Failed to create texture atlas", e);
         }
-        
-        if (vs == null || fs == null ) {
+
+        if (vs == null || fs == null) {
             return;
         }
-        
-        ShaderProgram shader = new ShaderProgram(vs, fs);
-        renderer = new Renderer(shader);
-        BlockRegistry.register("dirt", Blocks.DIRT.get());
-        
-        // Create the world and building system
-        world = new World();
-        blockPlacer = new BlockPlacer(world);
-        
-        Debug.log("World initialized with " + world.getChunks().size() + " chunks");
-        Debug.log("Building system initialized - Left click: place, Right click: break");
-        
-        // Create some additional entities for testing (optional)
-        Block obj1 = Blocks.DIRT.get();
-        obj1.position.set(10, 5, 10);
 
-        Block obj2 = Blocks.DIRT.get();
-        obj2.position.set(15, 5, 10);
-        
-        objects = List.of(obj1, obj2);
+        Block block = Blocks.DIRT.get();
+
+        objects = List.of(block);
+        ShaderProgram shader = new ShaderProgram(vs, fs);
+        Debug.log("UI shaders loaded: " + (uiv != null && uif != null));
+        uishader = new ShaderProgram(uiv, uif);
+
+        // Create a semi-transparent red rectangle for UI
+        // healthBar =
+
+        ui = new Container(0, 80, 180, 600);
+        ui.addChild(new ColorRect(10, 10, 200, 30, 1f, 0f, 0f, 1f));
+        // Position and scale the UI rectangle
+
+        renderer = new Renderer(shader);
+        uiRenderer = new UIRenderer(uishader);
+        BlockRegistry.register("dirt", Blocks.DIRT.get());
+
+        worldState.init();
+
     }
 
     @Override
     public void input(Window window) {
-        // Basic controls
         if (Input.isKeyPressed(Input.KEY_ESCAPE)) {
             window.setShouldClose(true);
         }
         if (Input.isKeyReleased(Input.KEY_Y)) {
             Debug.enable = !Debug.enable;
         }
-    
-        
-        // Building mode toggle
+
         if (Input.isKeyPressed(Input.KEY_B)) {
             buildMode = !buildMode;
             Debug.log("Build mode: " + (buildMode ? "PLACE blocks" : "BREAK blocks"));
         }
-        
-
-        // Mouse building controls
+        if( Input.isKeyPressed(Input.KEY_P)) {
+            ui.setPosition(ui.getX() +5, ui.getY());
+        }
+        if( Input.isKeyPressed(Input.KEY_O)) {
+            ui.setSize(ui.getWidth() -1, ui.getHeight());
+        }
+        if( Input.isKeyPressed(Input.KEY_L)) {
+            ui.setSize(ui.getWidth() +1, ui.getHeight());
+        }
         handleBuildingInput();
     }
-    
+
     private void handleBuildingInput() {
-        // Left mouse button - primary action
-        if(timer>cooldown){
-            timer =0;
-        }
-        else{
+        // Cooldown to prevent spam clicking
+        if (timer < cooldown) {
             return;
         }
-        if (Input.isMouseButtonPressed(Input.MOUSE_RIGHT) ) {
-            
+
+        if (Input.isMouseButtonPressed(Input.MOUSE_RIGHT)) {
             if (buildMode) {
                 placeBlock();
+                timer = 0;
             } else {
-    
                 breakBlock();
+                timer = 0;
             }
         }
-        
-        // Right mouse button - secondary action (opposite of current mode)
+
         if (Input.isMouseButtonPressed(Input.MOUSE_LEFT)) {
             if (buildMode) {
                 breakBlock();
+                timer = 0;
             } else {
                 placeBlock();
+                timer = 0;
             }
         }
     }
-    
-    private void placeBlock() {
-        BlockPlacer.RaycastResult result = blockPlacer.raycast(camera);
-    
+
+    @Override
+    public void placeBlock() {
+        BlockPlacer.RaycastResult result = BlockPlacer.raycast(worldState.getCurrentWorld(), camera, 5f);
+
         if (result.hit && result.placePosition != null) {
-            boolean success = blockPlacer.placeBlock(result.placePosition, selectedBlockId);
-            if (success) {
-                Vector3i pos = result.placePosition;
-                Debug.log("Placed " + getBlockName(selectedBlockId) + " at (" + 
-                         pos.x + ", " + pos.y + ", " + pos.z + ")");
-            }else{
-                System.out.println("noo waay");
-            }
-        }
-        else{
-            System.out.println("idk");
+            // Use the new client-side prediction system
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, selectedBlockId);
+            worldState.sendCommand(action);
+            Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
+        } else {
+            Debug.log("No valid placement position found");
         }
     }
-    
+
     private void breakBlock() {
-        BlockPlacer.RaycastResult result = blockPlacer.raycast(camera);
-        
+        BlockPlacer.RaycastResult result = BlockPlacer.raycast(worldState.getCurrentWorld(), camera, 5f);
+
         if (result.hit && result.blockPosition != null) {
-            boolean success = blockPlacer.breakBlock(result.blockPosition);
-            if (success) {
-                Vector3i pos = result.blockPosition;
-                Debug.log("Broke block at (" + pos.x + ", " + pos.y + ", " + pos.z + ")");
-            }
-        }
-    }
-    
-    private String getBlockName(int blockId) {
-        // Add more block types as you register them
-        switch (blockId) {
-            case 1: return "Dirt";
-            case 2: return "Stone";
-            case 3: return "Wood";
-            case 4: return "Grass";
-            // Add more cases for other blocks
-            default: return "Unknown";
+            // Break block by placing air (blockId = 0)
+            PlaceBlockCommand action = new PlaceBlockCommand(result.blockPosition, 0);
+            worldState.sendCommand(action);
+            Debug.log("Block broken immediately with client-side prediction: " + result.blockPosition);
         }
     }
 
     @Override
     public void update(float delta) {
         camera.update(delta);
-        world.update(delta);
-        timer+= delta;
+        worldState.update(delta); // Handles client-side prediction and server reconciliation
+        timer += delta;
+        // Update UI elements if needed
+
     }
 
     @Override
     public void render() {
+        // 1. Clear the screen at the start of the frame
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glEnable(GL_DEPTH_TEST);
-        
-        // Enable backface culling for better performance
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        glFrontFace(GL_CCW);
 
-        if (renderer == null)
-            return;
-        
+        // 2. Render 3D world
         renderer.render(objects, camera);
-        world.render(renderer, camera);
-        
-        // Optional: Render crosshair or building UI here
+        worldState.render(renderer, camera);
+        // 3. Render 2D UI on top
         renderBuildingUI();
     }
-    
+
     private void renderBuildingUI() {
-        // This is where you'd render:
-        // - Crosshair in center of screen
-        // - Currently selected block indicator
-        // - Build mode indicator
-        // For now, we just use debug output
+        // Render UI elements
+        // uiRenderer.render(healthBar, 1280, 720);
+        ui.draw(uiRenderer, 1280, 720);
     }
 
     @Override
     public void cleanup() {
-        if (world != null) {
-            // Add cleanup logic for world if needed
-        }
+        // Cleanup resources
+
     }
 }

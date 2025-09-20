@@ -16,7 +16,7 @@ public abstract class GameObject {
     public String getName() {
         return name;
     }
-
+  
     public Matrix4f getModelMatrix() {
         return new Matrix4f()
                 .translate(position)

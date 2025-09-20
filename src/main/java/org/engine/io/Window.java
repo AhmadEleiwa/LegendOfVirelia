@@ -50,9 +50,9 @@ public class Window {
 
         // DISABLE backface culling for debugging - you can enable it later once faces
         // are correct
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_BACK);
-        glFrontFace(GL_CCW); // Counter-clockwise winding = front face
+        // glEnable(GL_CULL_FACE);
+        // glCullFace(GL_BACK);
+        // glFrontFace(GL_CCW); // Counter-clockwise winding = front face
 
         // Enable blending for transparency (if needed)
         glEnable(GL_BLEND);
@@ -70,6 +70,7 @@ public class Window {
 
     public void update() {
         glClearColor(color.x, color.y, color.z, 1.0f);
+        // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         GLFW.glfwSwapBuffers(windowHandle);
         GLFW.glfwPollEvents();
     }

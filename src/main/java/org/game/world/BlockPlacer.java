@@ -15,17 +15,17 @@ public class BlockPlacer {
      * Cast a ray from camera position in camera direction to find block
      * intersection
      */
-    public RaycastResult raycast(Camera camera) {
+    public static RaycastResult raycast(World world ,Camera camera, float maxReach) {
         Vector3f rayStart = new Vector3f(camera.getPosition());
         Vector3f rayDir = camera.getForward(); // You'll need to add this method to Camera
 
-        return raycastWorld(rayStart, rayDir, maxReach);
+        return raycastWorld(world, rayStart, rayDir, maxReach);
     }
 
     /**
      * Raycast through the world to find block intersections
      */
-    private RaycastResult raycastWorld(Vector3f start, Vector3f direction, float maxDistance) {
+    private static RaycastResult raycastWorld(World world, Vector3f start, Vector3f direction, float maxDistance) {
         // DDA algorithm for voxel raycasting
         Vector3f current = new Vector3f(start);
         Vector3f step = new Vector3f(direction).normalize().mul(0.1f); // Step size
@@ -61,14 +61,14 @@ public class BlockPlacer {
     /**
      * Place a block at the target position
      */
-    public boolean placeBlock(Vector3i position, int blockId) {
+    public Chunk placeBlock(Vector3i position, int blockId) {
         return world.setBlockAt(position.x, position.y, position.z, blockId);
     }
 
     /**
      * Remove/break a block at the target position
      */
-    public boolean breakBlock(Vector3i position) {
+    public Chunk breakBlock(Vector3i position) {
         return world.setBlockAt(position.x, position.y, position.z, 0); // 0 = air
     }
 

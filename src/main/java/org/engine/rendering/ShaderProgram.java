@@ -10,9 +10,9 @@ public class ShaderProgram {
         int vertex = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertex, vertexSource);
         glCompileShader(vertex);
-        if (glGetShaderi(vertex, GL_COMPILE_STATUS) == GL_FALSE)
+        if (glGetShaderi(vertex, GL_COMPILE_STATUS) == GL_FALSE){
             Logger.log("Vertex shader error: " + glGetShaderInfoLog(vertex));
-
+        }
         int fragment = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragment, fragmentSource);
         glCompileShader(fragment);
@@ -32,6 +32,9 @@ public class ShaderProgram {
 
     public void use() {
         glUseProgram(id);
+    }
+    public void stop() {
+        glUseProgram(0);
     }
 
     public int getId() {

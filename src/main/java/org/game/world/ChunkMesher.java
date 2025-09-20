@@ -3,7 +3,6 @@ package org.game.world;
 import org.game.meshes.Mesh;
 import org.game.meshes.Model;
 import org.game.meshes.Quad;
-import org.game.rendering.VortexGame;
 import org.game.utils.AtlasBuilder;
 
 import java.util.ArrayList;

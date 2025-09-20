@@ -76,20 +76,6 @@ public class Input {
     public static Window defaultWindow = null;
     private static int[] lastKeys = new int[GLFW.GLFW_KEY_LAST + 1];
 
-    public static boolean isMouseHovered(Window window) {
-        return glfwGetKey(window.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_1) == GLFW.GLFW_PRESS ||
-                glfwGetKey(window.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_2) == GLFW.GLFW_PRESS ||
-                glfwGetKey(window.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_3) == GLFW.GLFW_PRESS;
-    }
-
-    public static boolean isMouseScrolled(Window window) {
-        return glfwGetKey(window.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_2) == GLFW.GLFW_PRESS;
-    }
-
-    public static boolean isMouseMoved(Window window) {
-        return glfwGetKey(window.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_1) == GLFW.GLFW_PRESS;
-    }
-
     public static boolean isMouseButtonPressed(Window window, int button) {
         return glfwGetMouseButton(window.getWindowHandle(), button) == GLFW.GLFW_PRESS;
     }
@@ -135,31 +121,13 @@ public class Input {
         return state == GLFW.GLFW_PRESS || state == GLFW.GLFW_REPEAT;
     }
 
-    public static boolean isMouseHovered() {
-        return glfwGetKey(defaultWindow.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_1) == GLFW.GLFW_PRESS ||
-                glfwGetKey(defaultWindow.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_2) == GLFW.GLFW_PRESS ||
-                glfwGetKey(defaultWindow.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_3) == GLFW.GLFW_PRESS;
-    }
-
-    public static boolean isMouseScrolled() {
-        return glfwGetKey(defaultWindow.getWindowHandle(), GLFW.GLFW_MOUSE_BUTTON_2) == GLFW.GLFW_PRESS;
-    }
-
-
     public static boolean isMouseButtonPressed(int button) {
-  
+
         return glfwGetMouseButton(defaultWindow.getWindowHandle(), button) == GLFW.GLFW_PRESS;
     }
+
     public static boolean isMouseMoved() {
         return true;
-    }
-
-    public static double getMouseX(Window window) {
-        return window.getMousePos().x;
-    }
-
-    public static double getMouseY(Window window) {
-        return window.getMousePos().x;
     }
 
     public static double getMouseX() {
