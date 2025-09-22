@@ -19,6 +19,7 @@ import org.game.core.GameObject;
 import org.game.entities.Camera;
 import org.game.ui.ColorRect;
 import org.game.ui.Container;
+import org.game.ui.Label;
 import org.game.utils.AtlasBuilder;
 import org.game.world.Block;
 import org.game.world.BlockPlacer;
@@ -77,7 +78,8 @@ public class ClientGameLogic implements ClientSide {
         ui = new Container(0, 80, 180, 600);
         ui.addChild(new ColorRect(10, 10, 200, 30, 1f, 0f, 0f, 1f));
         // Position and scale the UI rectangle
-
+        Label label = new Label(10, 10, 200, 30, "Health: 100%", 16);
+        ui.addChild(label);
         renderer = new Renderer(shader);
         uiRenderer = new UIRenderer(uishader);
         BlockRegistry.register("dirt", Blocks.DIRT.get());

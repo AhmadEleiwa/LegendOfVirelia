@@ -56,7 +56,7 @@ public class Container extends UIElement {
         }
         glEnable(GL_SCISSOR_TEST);
 
-        uiRenderer.render(this, width, height, true, .7f, 1f, 1f, 1f, false, false);
+        uiRenderer.render(this, width, height, .7f, 1f, 1f, 1f, null, false);
         glScissor(x, height - (y + this.height), this.width, this.height);
         for (UIElement child : children) {
             if (child.isVisible()) {

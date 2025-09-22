@@ -20,7 +20,7 @@ public class ColorRect extends UIElement {
     @Override
     public void draw(UIRenderer uiRenderer, int windowWidth, int windowHeight) {
         if (visible) {
-            uiRenderer.render(this, windowWidth, windowHeight, true, r, g, b, a, false, false);
+            uiRenderer.render(this, windowWidth, windowHeight, r, g, b, a, null, false);
         }
     }
 }
