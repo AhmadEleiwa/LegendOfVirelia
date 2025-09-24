@@ -26,6 +26,7 @@ import org.game.world.BlockPlacer;
 import org.game.world.BlockRegistry;
 import org.game.world.Blocks;
 import org.legendofvirelia.shared.ClientWorldState;
+import org.legendofvirelia.shared.commands.BreakBlockCommand;
 import org.legendofvirelia.shared.commands.PlaceBlockCommand;
 
 public class ClientGameLogic implements ClientSide {
@@ -159,7 +160,7 @@ public class ClientGameLogic implements ClientSide {
 
         if (result.hit && result.blockPosition != null) {
             // Break block by placing air (blockId = 0)
-            PlaceBlockCommand action = new PlaceBlockCommand(result.blockPosition, 0);
+            BreakBlockCommand action = new BreakBlockCommand(result.blockPosition);
             worldState.sendCommand(action);
             Debug.log("Block broken immediately with client-side prediction: " + result.blockPosition);
         }
