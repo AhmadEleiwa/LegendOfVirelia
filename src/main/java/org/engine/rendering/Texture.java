@@ -1,6 +1,7 @@
 package org.engine.rendering;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
 import static org.lwjgl.opengl.GL13.glActiveTexture;
 
 public class Texture {
@@ -17,6 +18,7 @@ public class Texture {
      * Binds this texture to the active texture unit.
      */
     public void bind() {
+        glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, id);
     }
 
