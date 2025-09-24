@@ -26,7 +26,7 @@ public class PlaceBlockCommand implements ServerCommand{
         if(chunk != null) {
             world.requestRerenderChunk(chunk);
             world.sendCommand(new PlaceBlockConfirmCommand(position, blockId));
-            // world.checkAndUpdateNeighboringChunks(position);
+            world.checkAndUpdateNeighboringChunks(position);
         }
     }
 }

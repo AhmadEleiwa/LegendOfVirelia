@@ -1,7 +1,6 @@
 package org.game.world;
 
 import org.engine.rendering.Renderer;
-import org.game.meshes.Mesh;
 import org.game.meshes.Model;
 import org.game.entities.Camera;
 import org.joml.Vector3f;
