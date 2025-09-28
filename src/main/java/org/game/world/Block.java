@@ -11,7 +11,10 @@ import org.game.meshes.ModelLoader;
 public class Block extends GameObject {
     public static final float SIZE = 1.0f;
     protected Model model;
+    protected boolean isTransparent;
+
     private static int idCounter = 1;
+     
     
     /*
      * Constructor for a Block object, which is a cube with predefined size.
@@ -82,5 +85,15 @@ public class Block extends GameObject {
         if (model != null) {
             model.delete();
         }
+    }
+        public boolean isTransparent() {
+        return isTransparent;
+    }
+
+    public void setTransparent(boolean isTransparent) {
+        this.isTransparent = isTransparent;
+    }
+    public int getLightLevel(){
+        return 0;
     }
 }

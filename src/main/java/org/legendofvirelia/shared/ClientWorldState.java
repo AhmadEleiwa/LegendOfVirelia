@@ -2,6 +2,7 @@ package org.legendofvirelia.shared;
 
 import org.engine.rendering.Renderer;
 import org.game.entities.Camera;
+import org.game.lighting.DirectionalLight;
 import org.game.world.BlockPlacer;
 import org.game.world.Chunk;
 import org.game.world.WorldRenderer;
@@ -14,6 +15,7 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
     @Override
     public void init() {
         blockPlacer = new BlockPlacer(world);
+        WorldRenderer.initialize(this.world);
         sendCommand(new ClientReady());
     }
 
@@ -52,14 +54,14 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
         chunksToUpdate.clear();
     }
 
-    public void render(Renderer renderer, Camera camera) {
+    public void render(Renderer renderer, Camera camera, DirectionalLight light) {
         if (needRerender) {
             rerender();
         }
         if (!chunksToUpdate.isEmpty()) {
             rerenderChunks();
         }
-        WorldRenderer.renderWorld(world, renderer, camera);
+        WorldRenderer.renderWorld(world, renderer, camera, light);
     }
 
     public void sendCommand(ServerCommand command) {
