@@ -18,6 +18,7 @@ import org.engine.utils.Resource;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
+import org.game.lighting.PointLight;
 import org.game.ui.ColorRect;
 import org.game.ui.Container;
 import org.game.ui.Label;
@@ -47,6 +48,7 @@ public class ClientGameLogic implements ClientSide {
     private float time = 0;
     ShaderProgram uishader;
     DirectionalLight sun;
+    PointLight pointLight;
 
     public ClientGameLogic(ClientWorldState state) {
         this.worldState = state;
@@ -88,7 +90,10 @@ public class ClientGameLogic implements ClientSide {
         renderer = new Renderer(shader);
         uiRenderer = new UIRenderer(uishader);
         BlockRegistry.register("dirt", Blocks.DIRT.get());
+        BlockRegistry.register("torch", Blocks.Torch.get());
+
         sun = DirectionalLight.createSunlight();
+        pointLight = new PointLight();
         worldState.init();
 
     }
@@ -151,7 +156,10 @@ public class ClientGameLogic implements ClientSide {
 
         if (result.hit && result.placePosition != null) {
             // Use the new client-side prediction system
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, selectedBlockId);
+            Debug.log(BlockRegistry.getId("dirt"));
+            Debug.log(BlockRegistry.getId("torch"));
+
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("torch"));
             worldState.sendCommand(action);
             Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
         } else {
@@ -176,8 +184,7 @@ public class ClientGameLogic implements ClientSide {
         worldState.update(delta); // Handles client-side prediction and server reconciliation
         timer += delta;
         // Update UI elements if needed
-        time = time ==1? 0:Math.clamp(time + delta/10f, 0f, 1f);
-        Debug.log("Time: " + String.valueOf(time));
+        time = time ==1? 0:Math.clamp(time + delta/100f, 0f, 1f);
         sun.updateForTimeOfDay(time);
         
 
@@ -190,7 +197,7 @@ public class ClientGameLogic implements ClientSide {
 
         // 2. Render 3D world
         renderer.render(objects, camera, sun);
-        worldState.render(renderer, camera, sun);
+        worldState.render(renderer, camera, sun, pointLight);
         // 3. Render 2D UI on top
         renderBuildingUI();
     }

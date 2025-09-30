@@ -12,7 +12,7 @@ public class Block extends GameObject {
     public static final float SIZE = 1.0f;
     protected Model model;
     protected boolean isTransparent;
-
+    protected int lightLevel;
     private static int idCounter = 1;
      
     
@@ -58,7 +58,10 @@ public class Block extends GameObject {
         // Create a Model with the newly created mesh and the textures from the JSON
         // this.model = new Model(meshes, modelJson.textures);
     }
-
+    public Block(String name, int lightLevel){
+        this(name);
+        this.lightLevel = lightLevel;
+    }
     public String toString() {
         return "Block[type=" + type + "]";
     }
@@ -94,6 +97,6 @@ public class Block extends GameObject {
         this.isTransparent = isTransparent;
     }
     public int getLightLevel(){
-        return 0;
+        return this.lightLevel;
     }
 }

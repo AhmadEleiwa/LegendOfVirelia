@@ -4,6 +4,7 @@ import org.engine.utils.Debug;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
+import org.game.lighting.PointLight;
 import org.game.meshes.Model;
 import org.game.rendering.FrustumCuller;
 import org.game.world.Block;
@@ -116,7 +117,7 @@ public class Renderer {
 
     }
 
-    public void render(Model model, Camera camera, DirectionalLight light, Vector3f position, Vector3f center,
+    public void render(Model model, Camera camera, DirectionalLight light, PointLight pointLight, Vector3f position, Vector3f center,
             float radius) {
         shader.use();
 
@@ -131,6 +132,7 @@ public class Renderer {
         glUniformMatrix4fv(uniView, false, matrixBuffer);
 
         light.uploadToShader(shader.getId());
+        pointLight.uploadToShader(shader.getId());
 
         if (!culler.isVisible(center, radius)) {
             shader.stop();
@@ -146,6 +148,7 @@ public class Renderer {
         normalMatrix.get(matrixNormalBuffer);
         glUniformMatrix4fv(uniModel, false, matrixBuffer);
         glUniformMatrix3fv(uniNormal, false, matrixNormalBuffer);
+
 
         // Tell the Model to draw itself
         model.draw();

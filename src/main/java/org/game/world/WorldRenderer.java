@@ -4,6 +4,7 @@ import org.engine.rendering.Renderer;
 import org.game.meshes.Model;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
+import org.game.lighting.PointLight;
 import org.joml.Vector3f;
 
 import java.util.List;
@@ -125,7 +126,7 @@ public class WorldRenderer {
     /**
      * Render the world with lighting
      */
-    public static void renderWorld(World world, Renderer renderer, Camera camera, DirectionalLight light) {
+    public static void renderWorld(World world, Renderer renderer, Camera camera, DirectionalLight light, PointLight pointLight) {
         // Convert camera position to chunk coords
         int cameraChunkX = (int) Math.floor(camera.getPosition().x / Chunk.SIZE_X);
         int cameraChunkZ = (int) Math.floor(camera.getPosition().z / Chunk.SIZE_Z);
@@ -140,7 +141,7 @@ public class WorldRenderer {
             Vector3f chunkCenter = new Vector3f(pos.x + 8, 8, pos.z + 8);
             float radius = (float) Math.sqrt(16 * 16 * 3) / 2;
 
-            renderer.render(model, camera, light, chunk.getPosition(), chunkCenter, radius);
+            renderer.render(model, camera, light,pointLight, chunk.getPosition(), chunkCenter, radius);
         }
     }
     

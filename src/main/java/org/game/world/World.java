@@ -18,7 +18,7 @@ public class World {
         for (int cx = -15; cx < 15; cx++) {
             for (int cz = -15; cz < 15; cz++) {
                 Chunk chunk = new Chunk(cx, cz);
-
+             
                 // simple terrain generation
                 for (int x = 0; x < Chunk.SIZE_X; x++) {
                     for (int z = 0; z < Chunk.SIZE_Z; z++) {
@@ -30,7 +30,7 @@ public class World {
                         }
                     }
                 }
-
+                
                 chunks.put(key(cx, cz), chunk);
             }
         }
