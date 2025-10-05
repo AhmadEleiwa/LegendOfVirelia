@@ -18,7 +18,7 @@ import org.engine.utils.Resource;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
-import org.game.lighting.PointLight;
+
 import org.game.ui.ColorRect;
 import org.game.ui.Container;
 import org.game.ui.Label;
@@ -48,8 +48,8 @@ public class ClientGameLogic implements ClientSide {
     private float time = 0;
     ShaderProgram uishader;
     DirectionalLight sun;
-    PointLight pointLight;
 
+    
     public ClientGameLogic(ClientWorldState state) {
         this.worldState = state;
     }
@@ -93,7 +93,6 @@ public class ClientGameLogic implements ClientSide {
         BlockRegistry.register("torch", Blocks.Torch.get());
 
         sun = DirectionalLight.createSunlight();
-        pointLight = new PointLight();
         worldState.init();
 
     }
@@ -159,7 +158,7 @@ public class ClientGameLogic implements ClientSide {
             Debug.log(BlockRegistry.getId("dirt"));
             Debug.log(BlockRegistry.getId("torch"));
 
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("torch"));
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("dirt"));
             worldState.sendCommand(action);
             Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
         } else {
@@ -197,7 +196,7 @@ public class ClientGameLogic implements ClientSide {
 
         // 2. Render 3D world
         renderer.render(objects, camera, sun);
-        worldState.render(renderer, camera, sun, pointLight);
+        worldState.render(renderer, camera, sun);
         // 3. Render 2D UI on top
         renderBuildingUI();
     }
