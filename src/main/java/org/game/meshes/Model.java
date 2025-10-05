@@ -8,6 +8,7 @@ import org.engine.utils.Debug;
 
 import org.game.utils.AtlasBuilder;
 
+
 public class Model {
     // A model can be composed of multiple meshes
     private ArrayList<Mesh> meshes = new ArrayList<>();
@@ -73,4 +74,5 @@ public class Model {
     public List<Mesh> getMeshes() {
         return meshes;
     }
+
 }

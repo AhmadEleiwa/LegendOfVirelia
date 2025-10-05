@@ -6,14 +6,12 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.stb.STBTTAlignedQuad;
 import org.lwjgl.stb.STBTTBakedChar;
 import org.lwjgl.system.MemoryStack;
-import org.w3c.dom.Text;
 
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL33C.GL_TEXTURE_SWIZZLE_RGBA;
-import static org.lwjgl.opengl.GL43C.GL_TEXTURE_SWIZZLE_RGBA;
 
 import static org.lwjgl.stb.STBTruetype.*;
 

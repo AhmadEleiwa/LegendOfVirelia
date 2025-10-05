@@ -17,6 +17,8 @@ import org.engine.utils.Logger;
 import org.engine.utils.Resource;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
+import org.game.lighting.DirectionalLight;
+
 import org.game.ui.ColorRect;
 import org.game.ui.Container;
 import org.game.ui.Label;
@@ -42,8 +44,12 @@ public class ClientGameLogic implements ClientSide {
     // Building system state
     private int selectedBlockId = 1;
     private boolean buildMode = true;
+    private GameObject cube;
+    private float time = 0;
     ShaderProgram uishader;
+    DirectionalLight sun;
 
+    
     public ClientGameLogic(ClientWorldState state) {
         this.worldState = state;
     }
@@ -84,7 +90,9 @@ public class ClientGameLogic implements ClientSide {
         renderer = new Renderer(shader);
         uiRenderer = new UIRenderer(uishader);
         BlockRegistry.register("dirt", Blocks.DIRT.get());
+        BlockRegistry.register("torch", Blocks.Torch.get());
 
+        sun = DirectionalLight.createSunlight();
         worldState.init();
 
     }
@@ -102,14 +110,14 @@ public class ClientGameLogic implements ClientSide {
             buildMode = !buildMode;
             Debug.log("Build mode: " + (buildMode ? "PLACE blocks" : "BREAK blocks"));
         }
-        if( Input.isKeyPressed(Input.KEY_P)) {
-            ui.setPosition(ui.getX() +5, ui.getY());
+        if (Input.isKeyPressed(Input.KEY_P)) {
+            ui.setPosition(ui.getX() + 5, ui.getY());
         }
-        if( Input.isKeyPressed(Input.KEY_O)) {
-            ui.setSize(ui.getWidth() -1, ui.getHeight());
+        if (Input.isKeyPressed(Input.KEY_O)) {
+            ui.setSize(ui.getWidth() - 1, ui.getHeight());
         }
-        if( Input.isKeyPressed(Input.KEY_L)) {
-            ui.setSize(ui.getWidth() +1, ui.getHeight());
+        if (Input.isKeyPressed(Input.KEY_L)) {
+            ui.setSize(ui.getWidth() + 1, ui.getHeight());
         }
         handleBuildingInput();
     }
@@ -147,7 +155,10 @@ public class ClientGameLogic implements ClientSide {
 
         if (result.hit && result.placePosition != null) {
             // Use the new client-side prediction system
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, selectedBlockId);
+            Debug.log(BlockRegistry.getId("dirt"));
+            Debug.log(BlockRegistry.getId("torch"));
+
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("dirt"));
             worldState.sendCommand(action);
             Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
         } else {
@@ -172,6 +183,9 @@ public class ClientGameLogic implements ClientSide {
         worldState.update(delta); // Handles client-side prediction and server reconciliation
         timer += delta;
         // Update UI elements if needed
+        time = time ==1? 0:Math.clamp(time + delta/100f, 0f, 1f);
+        sun.updateForTimeOfDay(time);
+        
 
     }
 
@@ -181,8 +195,8 @@ public class ClientGameLogic implements ClientSide {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // 2. Render 3D world
-        renderer.render(objects, camera);
-        worldState.render(renderer, camera);
+        renderer.render(objects, camera, sun);
+        worldState.render(renderer, camera, sun);
         // 3. Render 2D UI on top
         renderBuildingUI();
     }
