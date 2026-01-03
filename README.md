@@ -610,22 +610,12 @@ void main() {
 ### World Rendering
 *[Showcase chunk-based terrain with lighting]*
 
-![World View](https://via.placeholder.com/800x450.png?text=Voxel+World+Rendering)
+<img src="screenshots/case.png" alt="Alt text" width="500">
 
 ### Lighting System
 *[Demonstrate sunlight, block light, and day/night cycle]*
 
-![Lighting Demo](https://via.placeholder.com/800x450.png?text=Dynamic+Lighting+System)
-
-### Block Placement
-*[Show block placement with raycast visualization]*
-
-![Block Interaction](https://via.placeholder.com/800x450.png?text=Block+Placement+System)
-
-### Cross-Chunk Lighting
-*[Highlight light propagation across chunk boundaries]*
-
-![Cross-Chunk Light](https://via.placeholder.com/800x450.png?text=Cross-Chunk+Light+Propagation)
+<img src="screenshots/case2.png" alt="Alt text" width="500">
 
 ---
 
