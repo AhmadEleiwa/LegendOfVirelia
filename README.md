@@ -1,5 +1,3 @@
-I'll update the documentation with more detailed technical information based on the code you've provided. Here's the enhanced version:
-
 # LegendOfVirelia - Voxel Game Engine
 
 A Java-based voxel game engine built with OpenGL, featuring client-server architecture, chunk-based world rendering, advanced lighting system, and extensible command-based networking.
