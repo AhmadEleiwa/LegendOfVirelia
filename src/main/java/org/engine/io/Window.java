@@ -41,7 +41,7 @@ public class Window {
         else
             GLFW.glfwSwapInterval(0);
         GL.createCapabilities();
-
+       
         // glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         glEnable(GL_DEPTH_TEST);
@@ -65,7 +65,7 @@ public class Window {
                 mousePos.y = ypos;
             }
         });
-
+        GLFW.glfwFocusWindow(windowHandle);
     }
 
     public void update() {

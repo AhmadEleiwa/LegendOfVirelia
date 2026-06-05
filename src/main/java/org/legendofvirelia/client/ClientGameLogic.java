@@ -62,7 +62,7 @@ public class ClientGameLogic implements ClientSide {
         var uiv = Resource.loadText("shaders/ui.vert");
         var uif = Resource.loadText("shaders/ui.frag");
         try {
-            AtlasBuilder atlas = AtlasBuilder.create("assets/textures", 1600, 16);
+            AtlasBuilder atlas = AtlasBuilder.create("assets/textures", 1600, 32);
             Debug.log("Atlas UVs: " + atlas.getAllUVs().keySet());
         } catch (IOException e) {
             Logger.log("Failed to create texture atlas", e);
@@ -110,6 +110,8 @@ public class ClientGameLogic implements ClientSide {
             buildMode = !buildMode;
             Debug.log("Build mode: " + (buildMode ? "PLACE blocks" : "BREAK blocks"));
         }
+
+        
         if (Input.isKeyPressed(Input.KEY_P)) {
             ui.setPosition(ui.getX() + 5, ui.getY());
         }
@@ -158,7 +160,7 @@ public class ClientGameLogic implements ClientSide {
             Debug.log(BlockRegistry.getId("dirt"));
             Debug.log(BlockRegistry.getId("torch"));
 
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("dirt"));
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("torch"));
             worldState.sendCommand(action);
             Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
         } else {

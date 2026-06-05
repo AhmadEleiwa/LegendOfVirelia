@@ -4,7 +4,7 @@ import org.game.meshes.Model;
 import org.joml.Vector3f;
 
 public class Chunk implements Cloneable {
-    public static final int SIZE_X = 16, SIZE_Y = 48, SIZE_Z = 16;
+    public static final int SIZE_X = 16, SIZE_Y = 16, SIZE_Z = 16;
     private static final int MAX_LIGHT_LEVEL = 15;
 
     private int[][][] blocks = new int[SIZE_X][SIZE_Y][SIZE_Z];

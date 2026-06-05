@@ -4,8 +4,8 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Architecture](#architecture)
+- [Features](##featuresfeatures)
+- [Architecture](#-architecture)
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
 - [System Components](#system-components)

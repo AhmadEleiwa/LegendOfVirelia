@@ -42,9 +42,17 @@ vec3 CalcDirLight(DirectionalLight light, vec3 normal, vec3 texColor) {
     return (ambient + diffuse);
 }
 
-
 void main() {
-    vec3 texColor = texture(texture_sampler, fragTex).rgb;
+    // 1. Sample the full RGBA color to get the alpha (transparency) channel
+    vec4 texColorFull = texture(texture_sampler, fragTex);
+    
+    // 2. Discard the fragment if it's transparent (alpha threshold)
+    if (texColorFull.a < 0.1) {
+        discard;
+    }
+    
+    // Extract the RGB for the rest of your lighting calculations
+    vec3 texColor = texColorFull.rgb;
     vec3 norm = normalize(fragNormal);
     
     // Calculate directional light (sun) - reduced influence for voxel games
