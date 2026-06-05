@@ -132,6 +132,7 @@ public class Renderer {
 
         light.uploadToShader(shader.getId());
 
+
         if (!culler.isVisible(center, radius)) {
             shader.stop();
             return;
