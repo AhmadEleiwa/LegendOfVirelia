@@ -21,16 +21,12 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
 
     @Override
     public void update(float delta) {
-        // 1. Process server confirmations/corrections first
         processServerActions();
-
-        // 2. Process new client actions with prediction
         processClientActions();
         world.update(delta);
     }
 
     private void processServerActions() {
-        //
         ClientCommand command;
         while ((command = incomingCommands.poll()) != null) {
             command.execute(this);
@@ -38,13 +34,7 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
     }
 
     private void processClientActions() {
-        // This processes actions that were just submitted by the client
-        // They are applied immediately for client-side prediction
-    }
-
-    private void rerender() {
-        WorldRenderer.generateMesh(world);
-        needRerender = false;
+        // Prediction systems
     }
 
     private void rerenderChunks() {
@@ -55,12 +45,15 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
     }
 
     public void render(Renderer renderer, Camera camera, DirectionalLight light) {
-        if (needRerender) {
-            rerender();
-        }
+        // 1. DYNAMIC STAGGERED GENERATION: Checks for missing chunk meshes smoothly every frame
+        WorldRenderer.generateVisibleMeshes(world, camera.getPosition());
+
+        // 2. Immediate Block Modifications (Placing/breaking torches/blocks)
         if (!chunksToUpdate.isEmpty()) {
             rerenderChunks();
         }
+
+        // 3. Draw the final models to screen buffers
         WorldRenderer.renderWorld(world, renderer, camera, light);
     }
 
@@ -69,15 +62,12 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
     }
 
     public void requestRerender() {
-        needRerender = true;
+        // Safely kept if needed for fallback hooks, but bypasses global loop spikes
+        this.needRerender = true; 
     }
 
     @Override
     public void receiveServerCommands(ClientCommand command) {
         incomingCommands.offer(command);
-
     }
-
-
-
 }

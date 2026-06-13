@@ -122,8 +122,8 @@ public class Renderer {
 
         Matrix4f view = camera.getView();
         Matrix4f proj = camera.getProjection();
-        Matrix4f projView = new Matrix4f(proj).mul(view);
-        culler.update(projView);
+        // Matrix4f projView = new Matrix4f(proj).mul(view);
+        // culler.update(projView);
         // Send projection & view once
         proj.get(matrixBuffer);
         glUniformMatrix4fv(uniProj, false, matrixBuffer);
@@ -133,10 +133,10 @@ public class Renderer {
         light.uploadToShader(shader.getId());
 
 
-        if (!culler.isVisible(center, radius)) {
-            shader.stop();
-            return;
-        }
+        // if (!culler.isVisible(center, radius)) {
+        //     shader.stop();
+        //     return;
+        // }
 
         // Send the model matrix
         Matrix4f modelMatrix = new Matrix4f().identity();

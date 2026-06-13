@@ -15,6 +15,7 @@ public class ServerGameLogic implements ServerSide {
         // Initialize server world
         world.init();
         Debug.log("Server initialized");
+        // generator
     }
 
     @Override

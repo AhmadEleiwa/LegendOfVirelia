@@ -33,8 +33,8 @@ public class GameLoop {
         long lastRenderTime = System.nanoTime();
         long lastFpsTime = System.currentTimeMillis();
 
-        game.init();
-        
+        game.init(window);
+
         double accumulator = 0.0;
 
         while (!window.shouldClose()) {

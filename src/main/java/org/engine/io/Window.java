@@ -7,6 +7,7 @@ import org.lwjgl.glfw.GLFWCursorPosCallback;
 import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL11.*;
 
+
 public class Window {
     private long windowHandle;
     private final int width, height;
@@ -17,6 +18,8 @@ public class Window {
 
     private Vector3f color = new Vector3f(0.52f, 0.81f, 0.90f);
     private Vector2d mousePos = new Vector2d();
+    private long primaryMonitor;
+    private boolean isFullScreen;
 
     public Vector2d getMousePos() {
         return new Vector2d(mousePos);
@@ -30,8 +33,12 @@ public class Window {
         if (!GLFW.glfwInit())
             throw new IllegalStateException("Unable to init GLFW");
         GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, GLFW.GLFW_TRUE);
-        windowHandle = GLFW.glfwCreateWindow(width, height, title, 0, 0);
+        GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
+        primaryMonitor = GLFW.glfwGetPrimaryMonitor();
+        isFullScreen = true;
+        var vidMode = GLFW.glfwGetVideoMode(primaryMonitor);
 
+        windowHandle = GLFW.glfwCreateWindow(vidMode.width(), vidMode.height(), title, primaryMonitor, 0);
         if (windowHandle == 0)
             throw new RuntimeException("Failed to create window");
 
@@ -41,7 +48,7 @@ public class Window {
         else
             GLFW.glfwSwapInterval(0);
         GL.createCapabilities();
-       
+
         // glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
         glEnable(GL_DEPTH_TEST);
@@ -66,6 +73,8 @@ public class Window {
             }
         });
         GLFW.glfwFocusWindow(windowHandle);
+        glViewport(0, 0, vidMode.width(), vidMode.height());
+
     }
 
     public void update() {
@@ -89,6 +98,9 @@ public class Window {
     }
 
     public int getHeight() {
+        if (isFullScreen) {
+            return GLFW.glfwGetVideoMode(primaryMonitor).height();
+        }
         return height;
     }
 
@@ -97,6 +109,9 @@ public class Window {
     }
 
     public int getWidth() {
+        if (isFullScreen) {
+            return GLFW.glfwGetVideoMode(primaryMonitor).width();
+        }
         return width;
     }
 
@@ -114,5 +129,18 @@ public class Window {
 
     public void setShouldClose(boolean b) {
         GLFW.glfwSetWindowShouldClose(windowHandle, b);
+    }
+
+    public void toggleFullScreen() {
+        isFullScreen = !isFullScreen;
+        if(isFullScreen){
+            var vidMode = GLFW.glfwGetVideoMode(primaryMonitor);
+            GLFW.glfwSetWindowMonitor(windowHandle, primaryMonitor, 0,0, vidMode.width(), vidMode.height(), vidMode.refreshRate());
+            glViewport(0, 0, vidMode.width(), vidMode.height());
+
+        }else{
+            GLFW.glfwSetWindowMonitor(windowHandle, 0, 100, 100, width, height, 0);
+            glViewport(0, 0, width, height);
+        }
     }
 }

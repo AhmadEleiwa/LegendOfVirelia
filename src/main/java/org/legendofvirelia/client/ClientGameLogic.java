@@ -27,8 +27,11 @@ import org.game.world.Block;
 import org.game.world.BlockPlacer;
 import org.game.world.BlockRegistry;
 import org.game.world.Blocks;
+import org.game.world.WorldRenderer;
+import org.joml.Vector2f;
 import org.legendofvirelia.shared.ClientWorldState;
 import org.legendofvirelia.shared.commands.BreakBlockCommand;
+import org.legendofvirelia.shared.commands.GenerateNewChunks;
 import org.legendofvirelia.shared.commands.PlaceBlockCommand;
 
 public class ClientGameLogic implements ClientSide {
@@ -36,7 +39,7 @@ public class ClientGameLogic implements ClientSide {
     private final ClientWorldState worldState;
     private Renderer renderer;
     private UIRenderer uiRenderer;
-    private Camera camera = new Camera(800f / 600f);
+    private Camera camera;
     public float timer = 0;
     public float cooldown = 0.1f; // Fast response for building
     private List<GameObject> objects;
@@ -46,16 +49,21 @@ public class ClientGameLogic implements ClientSide {
     private boolean buildMode = true;
     private GameObject cube;
     private float time = 0;
+    private Window window;
     ShaderProgram uishader;
     DirectionalLight sun;
 
-    
+    private Vector2f prev_pos = new Vector2f(0, 0);
+
     public ClientGameLogic(ClientWorldState state) {
         this.worldState = state;
     }
 
     @Override
-    public void init() {
+    public void init(Window window) {
+        this.window = window;
+        camera = new Camera((float) (window.getWidth()) / (float) (window.getHeight()));
+        prev_pos = new Vector2f(camera.position.x, camera.position.z);
         var vs = Resource.loadText("shaders/cube.vert");
         var fs = Resource.loadText("shaders/cube.frag");
         Debug.log("Client initialization");
@@ -91,6 +99,8 @@ public class ClientGameLogic implements ClientSide {
         uiRenderer = new UIRenderer(uishader);
         BlockRegistry.register("dirt", Blocks.DIRT.get());
         BlockRegistry.register("torch", Blocks.Torch.get());
+        BlockRegistry.register("dirt2", Blocks.DIRT2.get());
+        BlockRegistry.register("water", Blocks.WATER.get());
 
         sun = DirectionalLight.createSunlight();
         worldState.init();
@@ -99,6 +109,10 @@ public class ClientGameLogic implements ClientSide {
 
     @Override
     public void input(Window window) {
+
+        if (Input.isKeyPressed(Input.KEY_F11)) {
+            window.toggleFullScreen();
+        }
         if (Input.isKeyPressed(Input.KEY_ESCAPE)) {
             window.setShouldClose(true);
         }
@@ -111,7 +125,6 @@ public class ClientGameLogic implements ClientSide {
             Debug.log("Build mode: " + (buildMode ? "PLACE blocks" : "BREAK blocks"));
         }
 
-        
         if (Input.isKeyPressed(Input.KEY_P)) {
             ui.setPosition(ui.getX() + 5, ui.getY());
         }
@@ -185,9 +198,26 @@ public class ClientGameLogic implements ClientSide {
         worldState.update(delta); // Handles client-side prediction and server reconciliation
         timer += delta;
         // Update UI elements if needed
-        time = time ==1? 0:Math.clamp(time + delta/100f, 0f, 1f);
+        time = time == 1 ? 0 : Math.clamp(time + delta / 100f, 0f, 1f);
         sun.updateForTimeOfDay(time);
+        int currentChunkX = (int) Math.floor(camera.position.x / 16.0);
+        int currentChunkZ = (int) Math.floor(camera.position.z / 16.0);
         
+        int prevChunkX = (int) Math.floor(prev_pos.x / 16.0);
+        int prevChunkZ = (int) Math.floor(prev_pos.y / 16.0); // Storing Z inside Vector2f.y
+
+        // Trigger only if the player actually crosses a chunk border threshold on either axis!
+        if (currentChunkX != prevChunkX || currentChunkZ != prevChunkZ) {
+            worldState.sendCommand(new GenerateNewChunks(camera.position));
+            
+            // Save the exact chunk midpoint coordinate to prevent duplicate spam triggers
+            prev_pos.x = camera.position.x;
+            prev_pos.y = camera.position.z; 
+        }
+
+        // Run your staggered 1-to-2 mesh builder here per frame budget limits 
+        // to keep rendering at a locked, buttery-smooth framerate!
+        // WorldRenderer.generateVisibleMeshes(worldState.getCurrentWorld(), camera.position);
 
     }
 

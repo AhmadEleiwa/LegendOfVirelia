@@ -7,7 +7,7 @@ import org.joml.Vector3f;
 
 
 public class Camera {
-    public Vector3f position = new Vector3f(2, 2, 2);
+    public Vector3f position = new Vector3f(2, 30, 2);
     public Vector3f target = new Vector3f(0, 0, 0);
     public Vector3f up = new Vector3f(0, 1, 0);
     public float fov = (float) Math.toRadians(60.0f);
@@ -47,7 +47,7 @@ public class Camera {
     }
 
     public void update(float delta) {
-        float cameraSpeed = 5f * delta;
+        float cameraSpeed = 20f * delta;
 
         // Calculate movement vectors
         Vector3f forward = getForward();

@@ -19,7 +19,7 @@ public abstract class WorldState<T extends Command<?>, U extends Command<?>> {
     protected long timeOfDay;
     protected boolean isRaining;
     protected boolean isWorldGenerated = false;
-
+    protected Vector3i playerPosition;
     protected Queue<T> incomingCommands; // Actions from server to apply
     protected Queue<U> outgoingCommands; // Actions to send to server
 
