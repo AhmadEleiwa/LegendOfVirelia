@@ -17,12 +17,12 @@ import java.util.List;
 
 import static org.lwjgl.opengl.GL11.GL_TEXTURE_2D;
 import static org.lwjgl.opengl.GL11.glBindTexture;
-
 import static org.lwjgl.opengl.GL20.*;
 
 public class Renderer {
     private final ShaderProgram shader;
     private final int uniModel, uniView, uniProj, uniNormal;
+    private final int uniCameraPosition, uniFogColor, uniFogNear, uniFogFar;
     private final FloatBuffer matrixBuffer = BufferUtils.createFloatBuffer(16);
     private final FloatBuffer matrixNormalBuffer = BufferUtils.createFloatBuffer(9);
 
@@ -35,13 +35,16 @@ public class Renderer {
         uniView = glGetUniformLocation(shader.getId(), "view");
         uniProj = glGetUniformLocation(shader.getId(), "projection");
         uniNormal = glGetUniformLocation(shader.getId(), "normalMatrix");
+        uniCameraPosition = glGetUniformLocation(shader.getId(), "cameraPosition");
+        uniFogColor = glGetUniformLocation(shader.getId(), "fogColor");
+        uniFogNear = glGetUniformLocation(shader.getId(), "fogNear");
+        uniFogFar = glGetUniformLocation(shader.getId(), "fogFar");
 
         // Get the location of the texture sampler uniform
     }
 
     public void render(List<GameObject> objects, Camera camera, DirectionalLight light) {
         shader.use();
-
         Matrix4f view = camera.getView();
         Matrix4f proj = camera.getProjection();
 
@@ -51,6 +54,7 @@ public class Renderer {
         view.get(matrixBuffer);
         glUniformMatrix4fv(uniView, false, matrixBuffer);
         light.uploadToShader(shader.getId());
+        uploadAtmosphere(camera);
         int shininessLoc = glGetUniformLocation(shader.getId(), "shininess");
         glUniform1f(shininessLoc, 64.0f); // Material shininess
 
@@ -81,7 +85,6 @@ public class Renderer {
 
     public void render(List<GameObject> objects, Camera camera) {
         shader.use();
-
         Matrix4f view = camera.getView();
         Matrix4f proj = camera.getProjection();
 
@@ -119,7 +122,6 @@ public class Renderer {
     public void render(Model model, Camera camera, DirectionalLight light, Vector3f position, Vector3f center,
             float radius) {
         shader.use();
-
         Matrix4f view = camera.getView();
         Matrix4f proj = camera.getProjection();
         // Matrix4f projView = new Matrix4f(proj).mul(view);
@@ -131,6 +133,7 @@ public class Renderer {
         glUniformMatrix4fv(uniView, false, matrixBuffer);
 
         light.uploadToShader(shader.getId());
+        uploadAtmosphere(camera);
 
 
         // if (!culler.isVisible(center, radius)) {
@@ -157,9 +160,17 @@ public class Renderer {
         shader.stop();
     }
 
+    private void uploadAtmosphere(Camera camera) {
+        glUniform3f(uniCameraPosition,
+                camera.getViewPosition().x, camera.getViewPosition().y,
+                camera.getViewPosition().z);
+        glUniform3f(uniFogColor, 0.52f, 0.81f, 0.90f);
+        glUniform1f(uniFogNear, 45.0f);
+        glUniform1f(uniFogFar, 105.0f);
+    }
+
     public void render(Model model, Camera camera, Vector3f position, Vector3f center, float radius) {
         shader.use();
-
         Matrix4f view = camera.getView();
         Matrix4f proj = camera.getProjection();
         Matrix4f projView = new Matrix4f(proj).mul(view);
@@ -169,6 +180,7 @@ public class Renderer {
         glUniformMatrix4fv(uniProj, false, matrixBuffer);
         view.get(matrixBuffer);
         glUniformMatrix4fv(uniView, false, matrixBuffer);
+        uploadAtmosphere(camera);
 
         if (!culler.isVisible(center, radius)) {
             shader.stop();

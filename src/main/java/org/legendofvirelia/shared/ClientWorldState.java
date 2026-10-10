@@ -1,11 +1,17 @@
 package org.legendofvirelia.shared;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.engine.utils.Debug;
 import org.engine.rendering.Renderer;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
 import org.game.world.BlockPlacer;
 import org.game.world.Chunk;
 import org.game.world.WorldRenderer;
+import org.joml.Vector3i;
+import org.legendofvirelia.shared.commands.BlockChange;
 import org.legendofvirelia.shared.commands.ClientReady;
 import org.legendofvirelia.shared.command.ClientCommand;
 import org.legendofvirelia.shared.command.ServerCommand;
@@ -22,7 +28,6 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
     @Override
     public void update(float delta) {
         processServerActions();
-        processClientActions();
         world.update(delta);
     }
 
@@ -33,37 +38,63 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
         }
     }
 
-    private void processClientActions() {
-        // Prediction systems
+    public void applyBlockChanges(List<BlockChange> changes) {
+        long startedAt = System.nanoTime();
+        List<Vector3i> changedPositions = new ArrayList<>(changes.size());
+        for (BlockChange change : changes) {
+            Vector3i position = new Vector3i(change.x, change.y, change.z);
+            Chunk targetChunk = world.getChunk(
+                    Math.floorDiv(position.x, Chunk.SIZE_X),
+                    Math.floorDiv(position.z, Chunk.SIZE_Z));
+            if (targetChunk == null
+                    || targetChunk.getBlock(Math.floorMod(position.x, Chunk.SIZE_X), position.y,
+                            Math.floorMod(position.z, Chunk.SIZE_Z)) == change.blockId)
+                continue;
+
+            Chunk chunk = blockPlacer.placeBlock(position, change.blockId);
+            if (chunk == null)
+                continue;
+
+            changedPositions.add(position);
+            requestRerenderChunk(chunk);
+            checkAndUpdateNeighboringChunks(position);
+        }
+
+        for (Chunk chunk : WorldRenderer.updateBlockLighting(world, changedPositions))
+            requestRerenderChunk(chunk);
+
+        if (!changes.isEmpty()) {
+            Debug.log("Applied block-change confirmation: " + changedPositions.size() + "/"
+                    + changes.size() + " changed; " + pendingChunkUpdateCount()
+                    + " chunks queued for remeshing in "
+                    + ((System.nanoTime() - startedAt) / 1_000_000.0) + " ms.");
+        }
     }
 
-    private void rerenderChunks() {
-        for (Chunk chunk : chunksToUpdate) {
-            WorldRenderer.rebuildChunkAt(world, chunk);
+    private int pendingChunkUpdateCount() {
+        synchronized (chunksToUpdate) {
+            return chunksToUpdate.size();
         }
-        chunksToUpdate.clear();
+    }
+
+    private boolean rerenderOneChunk() {
+        Chunk chunk = pollChunkToUpdate();
+        if (chunk == null)
+            return false;
+        WorldRenderer.rebuildChunkAt(world, chunk);
+        return true;
     }
 
     public void render(Renderer renderer, Camera camera, DirectionalLight light) {
-        // 1. DYNAMIC STAGGERED GENERATION: Checks for missing chunk meshes smoothly every frame
-        WorldRenderer.generateVisibleMeshes(world, camera.getPosition());
+        if (!rerenderOneChunk())
+            WorldRenderer.generateVisibleMeshes(world, camera.getPosition());
 
-        // 2. Immediate Block Modifications (Placing/breaking torches/blocks)
-        if (!chunksToUpdate.isEmpty()) {
-            rerenderChunks();
-        }
-
-        // 3. Draw the final models to screen buffers
+        // 3. Draw the final models to screen buffers.
         WorldRenderer.renderWorld(world, renderer, camera, light);
     }
 
     public void sendCommand(ServerCommand command) {
         outgoingCommands.offer(command);
-    }
-
-    public void requestRerender() {
-        // Safely kept if needed for fallback hooks, but bypasses global loop spikes
-        this.needRerender = true; 
     }
 
     @Override

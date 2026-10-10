@@ -23,7 +23,16 @@ public abstract class UIElement {
     }
 
     public void recreateMesh() {
+        if (mesh != null)
+            mesh.delete();
         this.mesh = Mesh2D.createQuad(x, y, width, height);
+    }
+
+    public void destroy() {
+        if (mesh != null) {
+            mesh.delete();
+            mesh = null;
+        }
     }
 
     public void setPosition(int x, int y) {

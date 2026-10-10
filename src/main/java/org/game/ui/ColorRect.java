@@ -1,6 +1,5 @@
 package org.game.ui;
 import org.engine.rendering.UIRenderer;
-import org.game.meshes.Mesh2D;
 
 public class ColorRect extends UIElement {
     private final float r, g, b, a;
@@ -8,7 +7,6 @@ public class ColorRect extends UIElement {
     public ColorRect(int x, int y, int width, int height, float r, float g, float b, float a) {
         super(x, y, width, height);
         this.r = r; this.g = g; this.b = b; this.a = a;
-        this.mesh = Mesh2D.createQuad(x, y, width, height);
     }
 
 

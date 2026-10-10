@@ -15,7 +15,6 @@ public class Label extends UIElement {
         this.text = text;
         this.fontSize = fontSize;
         this.uiText = new UIText();
-        this.mesh = null;
         uiText.loadFont("fonts/Minecraft.ttf", fontSize);
 
         recreateMesh();
@@ -44,6 +43,8 @@ public class Label extends UIElement {
 
     @Override
     public void recreateMesh() {
+        if (mesh != null)
+            mesh.delete();
         int centerdPosX = x + width / 2 - (text.length() * fontSize) / 4;
         int centerdPosY = y + height / 2 + fontSize / 4;
         this.mesh = uiText.buildTextMesh(text, centerdPosX, centerdPosY, 1);
@@ -65,6 +66,12 @@ public class Label extends UIElement {
 
         uiRenderer.render(this, windowWidth, windowHeight, 1f, 1f, 1f, 1f, uiText.getTexture(), false);
 
+    }
+
+    @Override
+    public void destroy() {
+        super.destroy();
+        uiText.destroy();
     }
 
 }

@@ -1,6 +1,6 @@
 package org.legendofvirelia.shared.commands;
 
-import org.game.world.Chunk;
+import java.util.List;
 import org.joml.Vector3i;
 import org.legendofvirelia.shared.ServerWorldState;
 import org.legendofvirelia.shared.command.ServerCommand;
@@ -15,13 +15,8 @@ public class BreakBlockCommand implements ServerCommand {
 
     @Override
     public void execute(ServerWorldState world) {
-        Chunk chunk = world.getBlockPlacer().breakBlock(position);
-        if (chunk != null) {
-            world.requestRerenderChunk(chunk);
-            world.sendCommand(new BreakBlockConfirmCommand(position));
-            world.checkAndUpdateNeighboringChunks(position);
-        }
-
+        new BlockChangesCommand(List.of(
+                new BlockChange(position.x, position.y, position.z, 0))).execute(world);
     }
 
 }

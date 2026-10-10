@@ -1,42 +1,30 @@
 // shared/WorldState.java
 package org.legendofvirelia.shared;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.game.world.Chunk;
 import org.game.world.World;
-
 import org.game.world.BlockPlacer;
 import org.joml.Vector3i;
 import org.legendofvirelia.shared.command.Command;
 
 public abstract class WorldState<T extends Command<?>, U extends Command<?>> {
     protected World world;
-    protected long timeOfDay;
-    protected boolean isRaining;
-    protected boolean isWorldGenerated = false;
-    protected Vector3i playerPosition;
     protected Queue<T> incomingCommands; // Actions from server to apply
     protected Queue<U> outgoingCommands; // Actions to send to server
 
-    protected boolean needRerender = false;
-    protected List<Chunk> chunksToUpdate;
+    protected Set<Chunk> chunksToUpdate;
     protected BlockPlacer blockPlacer;
-
-    // Action ID tracking for client-side prediction
-    protected AtomicLong nextActionId = new AtomicLong(0);
-
-    // Client/Server mode
 
     public WorldState() {
         world = new World();
         incomingCommands = new ConcurrentLinkedQueue<>();
         outgoingCommands = new ConcurrentLinkedQueue<>();
-        chunksToUpdate = new ArrayList<>();
+        chunksToUpdate = new LinkedHashSet<>();
 
     }
 
@@ -49,12 +37,22 @@ public abstract class WorldState<T extends Command<?>, U extends Command<?>> {
         if (chunk == null)
             return;
         synchronized (chunksToUpdate) {
-            if (!chunksToUpdate.contains(chunk))
-                chunksToUpdate.add(chunk);
+            chunksToUpdate.add(chunk);
         }
     }
 
-    // Check if neighboring chunks need updates (for blocks on chunk boundaries)
+    protected Chunk pollChunkToUpdate() {
+        synchronized (chunksToUpdate) {
+            var iterator = chunksToUpdate.iterator();
+            if (!iterator.hasNext())
+                return null;
+            Chunk chunk = iterator.next();
+            iterator.remove();
+            return chunk;
+        }
+    }
+
+    // Refresh face culling only when the edit lies on a chunk border.
     public void checkAndUpdateNeighboringChunks(Vector3i blockPos) {
         int chunkX = Math.floorDiv(blockPos.x, Chunk.SIZE_X);
         int chunkZ = Math.floorDiv(blockPos.z, Chunk.SIZE_Z);
@@ -62,26 +60,22 @@ public abstract class WorldState<T extends Command<?>, U extends Command<?>> {
         int localX = blockPos.x - (chunkX * Chunk.SIZE_X);
         int localZ = blockPos.z - (chunkZ * Chunk.SIZE_Z);
 
-        if (localX == 0) {
-            Chunk neighborChunk = world.getChunk(chunkX - 1, chunkZ);
-            if (neighborChunk != null)
-                requestRerenderChunk(neighborChunk);
-        }
-        if (localX == Chunk.SIZE_X - 1) {
-            Chunk neighborChunk = world.getChunk(chunkX + 1, chunkZ);
-            if (neighborChunk != null)
-                requestRerenderChunk(neighborChunk);
-        }
-        if (localZ == 0) {
-            Chunk neighborChunk = world.getChunk(chunkX, chunkZ - 1);
-            if (neighborChunk != null)
-                requestRerenderChunk(neighborChunk);
-        }
-        if (localZ == Chunk.SIZE_Z - 1) {
-            Chunk neighborChunk = world.getChunk(chunkX, chunkZ + 1);
-            if (neighborChunk != null)
-                requestRerenderChunk(neighborChunk);
-        }
+        if (localX == 0)
+            requestRerenderChunk(world.getChunk(chunkX - 1, chunkZ));
+        if (localX == Chunk.SIZE_X - 1)
+            requestRerenderChunk(world.getChunk(chunkX + 1, chunkZ));
+        if (localZ == 0)
+            requestRerenderChunk(world.getChunk(chunkX, chunkZ - 1));
+        if (localZ == Chunk.SIZE_Z - 1)
+            requestRerenderChunk(world.getChunk(chunkX, chunkZ + 1));
+        if (localX == 0 && localZ == 0)
+            requestRerenderChunk(world.getChunk(chunkX - 1, chunkZ - 1));
+        if (localX == 0 && localZ == Chunk.SIZE_Z - 1)
+            requestRerenderChunk(world.getChunk(chunkX - 1, chunkZ + 1));
+        if (localX == Chunk.SIZE_X - 1 && localZ == 0)
+            requestRerenderChunk(world.getChunk(chunkX + 1, chunkZ - 1));
+        if (localX == Chunk.SIZE_X - 1 && localZ == Chunk.SIZE_Z - 1)
+            requestRerenderChunk(world.getChunk(chunkX + 1, chunkZ + 1));
     }
 
     // Server-side method to receive actions

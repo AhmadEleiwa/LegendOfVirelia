@@ -7,13 +7,14 @@ import org.joml.Vector3f;
 
 
 public class Camera {
-    public Vector3f position = new Vector3f(2, 30, 2);
+    public Vector3f position = new Vector3f(2, 40, 2);
     public Vector3f target = new Vector3f(0, 0, 0);
     public Vector3f up = new Vector3f(0, 1, 0);
     public float fov = (float) Math.toRadians(60.0f);
     public float near = 0.1f;
     public float far = 100.0f;
     public float aspect;
+    private final Vector3f viewPosition = new Vector3f(position);
 
     // Mouse movement variables
     private float lastMouseX = 0;
@@ -24,6 +25,8 @@ public class Camera {
     // First-person variables
     private float fpYaw = 0;
     private float fpPitch = 0;
+    private float baseFov = (float) Math.toRadians(60.0f);
+    private float impactFovKick;
 
     public Camera(float aspect) {
         this.aspect = aspect;
@@ -35,7 +38,7 @@ public class Camera {
     }
 
     public Matrix4f getView() {
-        return new Matrix4f().lookAt(position, target, up);
+        return new Matrix4f().lookAt(viewPosition, target, up);
     }
 
     public Matrix4f getProjection() {
@@ -47,42 +50,6 @@ public class Camera {
     }
 
     public void update(float delta) {
-        float cameraSpeed = 20f * delta;
-
-        // Calculate movement vectors
-        Vector3f forward = getForward();
-        Vector3f right = getRight();
-        Vector3f worldUp = new Vector3f(0, 1, 0);
-
-        // WASD movement
-        if (Input.isKeyDown(Input.KEY_W)) {
-            position.add(forward.mul(cameraSpeed, new Vector3f()));
-        }
-        if (Input.isKeyDown(Input.KEY_S)) {
-            position.sub(forward.mul(cameraSpeed, new Vector3f()));
-        }
-        if (Input.isKeyDown(Input.KEY_D)) {
-            position.add(right.mul(cameraSpeed, new Vector3f()));
-        }
-        if (Input.isKeyDown(Input.KEY_A)) {
-            position.sub(right.mul(cameraSpeed, new Vector3f()));
-        }
-        if (Input.isKeyDown(Input.KEY_SPACE)) {
-            position.add(worldUp.mul(cameraSpeed, new Vector3f()));
-        }
-        if (Input.isKeyDown(Input.KEY_LEFT_SHIFT)) {
-            position.sub(worldUp.mul(cameraSpeed, new Vector3f()));
-        }
-
-        // Reset camera position
-        if (Input.isKeyPressed(Input.KEY_R)) {
-            position.set(2, 2, 2);
-            fpYaw = 0;
-            fpPitch = 0;
-            updateTarget();
-            firstMouse = true;
-        }
-
         // Handle mouse movement
         handleMouseMovement();
 
@@ -91,6 +58,42 @@ public class Camera {
 
         // Update target based on current view direction
         updateTarget();
+        updateImpactFov(delta);
+    }
+
+    public void reset() {
+        position.set(2, 40, 2);
+        viewPosition.set(position);
+        fpYaw = 0.0f;
+        fpPitch = 0.0f;
+        impactFovKick = 0.0f;
+        fov = baseFov;
+        updateTarget();
+        firstMouse = true;
+    }
+
+    public void smoothViewPosition(float delta) {
+        if (delta <= 0.0f)
+            return;
+        float blend = 1.0f - (float) Math.exp(-12.0f * delta);
+        viewPosition.x = position.x;
+        viewPosition.z = position.z;
+        viewPosition.y += (position.y - viewPosition.y) * blend;
+        updateTarget();
+    }
+
+    private void updateImpactFov(float delta) {
+        if (delta <= 0.0f)
+            return;
+
+        impactFovKick *= (float) Math.exp(-5.0f * delta);
+        fov = baseFov + impactFovKick;
+    }
+
+    public void triggerImpact(float strength) {
+        float clampedStrength = Math.max(0.0f, Math.min(1.0f, strength));
+        impactFovKick = Math.min((float) Math.toRadians(6.0f),
+                impactFovKick + (float) Math.toRadians(2.5f) * clampedStrength);
     }
 
     private void handleMouseMovement() {
@@ -153,12 +156,14 @@ public class Camera {
 
     private void updateTarget() {
         Vector3f forward = getForward();
-        target.set(position).add(forward);
+        target.set(viewPosition).add(forward);
     }
 
     // Setters
     public void setPosition(Vector3f position) {
         this.position.set(position);
+        this.viewPosition.set(position);
+        updateTarget();
     }
 
     public void setTarget(Vector3f target) {
@@ -183,6 +188,7 @@ public class Camera {
     }
 
     public void setFov(float fov) {
+        this.baseFov = fov;
         this.fov = fov;
     }
 
@@ -196,6 +202,10 @@ public class Camera {
 
     public Vector3f getPosition() {
         return position;
+    }
+
+    public Vector3f getViewPosition() {
+        return viewPosition;
     }
 
     public Vector3f getTarget() {

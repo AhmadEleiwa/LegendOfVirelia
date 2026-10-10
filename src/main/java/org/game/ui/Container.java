@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.engine.rendering.UIRenderer;
+import org.engine.utils.Debug;
+import org.engine.utils.Logger;
 
 public class Container extends UIElement {
     protected List<UIElement> children;
@@ -51,13 +53,14 @@ public class Container extends UIElement {
 
     @Override
     public void draw(UIRenderer uiRenderer, int width, int height) {
+
         if (!visible) {
+            Logger.log("Container is not visible, skipping draw call.");
             return;
         }
         glEnable(GL_SCISSOR_TEST);
-
-        uiRenderer.render(this, width, height, .7f, 1f, 1f, 1f, null, false);
         glScissor(x, height - (y + this.height), this.width, this.height);
+        uiRenderer.render(this, width, height, .7f, 1f, 1f, 1f, null, false);
         for (UIElement child : children) {
             if (child.isVisible()) {
                 child.draw(uiRenderer, width, height);

@@ -4,7 +4,7 @@ import org.game.meshes.Model;
 import org.joml.Vector3f;
 
 public class Chunk implements Cloneable {
-    public static final int SIZE_X = 16, SIZE_Y = 64, SIZE_Z = 16;
+    public static final int SIZE_X = 16, SIZE_Y = 96, SIZE_Z = 16;
     private static final int MAX_LIGHT_LEVEL = 15;
 
     private int[][][] blocks = new int[SIZE_X][SIZE_Y][SIZE_Z];
@@ -30,7 +30,6 @@ public class Chunk implements Cloneable {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.position.set(chunkX * SIZE_X, 0, chunkZ * SIZE_Z);
-        initializeLighting();
     }
 
     // --- Mesh state ---
@@ -58,15 +57,6 @@ public class Chunk implements Cloneable {
     }
 
     // --- Lighting ---
-
-    private void initializeLighting() {
-        for (int x = 0; x < SIZE_X; x++)
-            for (int y = 0; y < SIZE_Y; y++)
-                for (int z = 0; z < SIZE_Z; z++) {
-                    sunlight[x][y][z] = 0;
-                    blocklight[x][y][z] = 0;
-                }
-    }
 
     // --- Clone ---
 
@@ -100,7 +90,6 @@ public class Chunk implements Cloneable {
 
     public Model getModel()              { return model; }
     public void  setModel(Model model)   { this.model = model; }
-
     // --- Blocks ---
 
     public int getBlock(int x, int y, int z) {

@@ -5,8 +5,8 @@ import org.joml.Vector3f;
 import org.joml.Vector3i;
 
 public class BlockPlacer {
-    private World world;
-    private float maxReach = 5.0f; // Maximum reach distance
+    private final World world;
+
     public BlockPlacer(World world) {
         this.world = world;
     }
@@ -15,11 +15,13 @@ public class BlockPlacer {
      * Cast a ray from camera position in camera direction to find block
      * intersection
      */
-    public static RaycastResult raycast(World world ,Camera camera, float maxReach) {
+    public static RaycastResult raycast(World world, Camera camera, float maxReach) {
         Vector3f rayStart = new Vector3f(camera.getPosition());
-        Vector3f rayDir = camera.getForward(); // You'll need to add this method to Camera
+        return raycastWorld(world, rayStart, camera.getForward(), maxReach);
+    }
 
-        return raycastWorld(world, rayStart, rayDir, maxReach);
+    public static RaycastResult raycastForPlacement(World world, Camera camera, float maxReach) {
+        return raycast(world, camera, maxReach);
     }
 
     /**
@@ -39,11 +41,10 @@ public class BlockPlacer {
             int blockZ = (int) Math.floor(current.z);
 
             // Get the block at this position
-            Block hitBlock = world.getBlockAt(blockX, blockY, blockZ);
+            int hitBlockId = world.getBlockIdAt(blockX, blockY, blockZ);
            
-            if (hitBlock != null && BlockRegistry.getId(hitBlock.getName()) != 0) {
+            if (hitBlockId != 0) {
                 // Hit a solid block
-                 System.out.println(BlockRegistry.getId(hitBlock.getName())); System.out.println(BlockRegistry.getId(hitBlock.getName()));
                 return new RaycastResult(true, new Vector3i(blockX, blockY, blockZ),
                         new Vector3i(lastEmptyPos), distance);
             }
@@ -70,14 +71,6 @@ public class BlockPlacer {
      */
     public Chunk breakBlock(Vector3i position) {
         return world.setBlockAt(position.x, position.y, position.z, 0); // 0 = air
-    }
-
-    public float getMaxReach() {
-        return maxReach;
-    }
-
-    public void setMaxReach(float maxReach) {
-        this.maxReach = maxReach;
     }
 
     /**

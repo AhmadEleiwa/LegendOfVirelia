@@ -1,54 +1,76 @@
 package org.game.world;
 
+import org.engine.utils.Debug;
 import org.engine.rendering.Renderer;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
 import org.game.meshes.Model;
+import org.joml.Vector3i;
 import org.joml.Vector3f;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 public class WorldRenderer {
     private static ChunkLightingSystem lightingSystem;
     private static float currentDayNightCycle = 1.0f;
+    private static final Set<Chunk> borderRefreshQueue = new LinkedHashSet<>();
 
     public static void initialize(World world) {
+        borderRefreshQueue.clear();
         lightingSystem = new ChunkLightingSystem(world);
         ChunkMesher.setLightingSystem(lightingSystem);
     }
 
-    /**
-     * Builds meshes for new (unmeshed) chunks only — one per frame to stay within budget.
-     * Already-meshed chunks are never touched here; their model is permanent until
-     * a block change or explicit markDirty() call.
-     */
+    /** Builds or refreshes at most one visible chunk mesh per frame. */
     public static void generateVisibleMeshes(World world, Vector3f playerPosition) {
-        int playerChunkX = (int) Math.floor(playerPosition.x / 16.0);
-        int playerChunkZ = (int) Math.floor(playerPosition.z / 16.0);
+        int playerChunkX = Math.floorDiv((int) Math.floor(playerPosition.x), Chunk.SIZE_X);
+        int playerChunkZ = Math.floorDiv((int) Math.floor(playerPosition.z), Chunk.SIZE_Z);
 
         List<Chunk> visibleChunks = world.getChunksNear(playerChunkX, playerChunkZ);
 
-        int meshesBuiltThisFrame = 0;
-        int maxMeshBuildsPerFrame = 1;
-
+        Chunk candidate = null;
+        long nearestDistance = Long.MAX_VALUE;
         for (Chunk chunk : visibleChunks) {
-            // THE GATEKEEPER: skip every chunk that already has a valid mesh.
-            if (chunk.isMeshBuilt()) continue;
+            if (chunk.isMeshBuilt() && !chunk.isLightingDirty())
+                continue;
 
-            if (meshesBuiltThisFrame >= maxMeshBuildsPerFrame) break;
-
-            lightingSystem.updateChunkLighting(chunk);
-            Model chunkModel = ChunkMesher.buildModel(world, chunk, currentDayNightCycle);
-            chunk.setModel(chunkModel);
-            chunk.setMeshBuilt(true);
-
-            // When this chunk is meshed for the first time, its neighbors may have
-            // culled their border faces because this chunk wasn't loaded yet.
-            // Now that it exists, rebuild any already-meshed neighbors so they
-            // re-evaluate those faces with the correct neighbor data.
-            refreshNeighborBorders(world, chunk.getChunkX(), chunk.getChunkZ());
-
-            meshesBuiltThisFrame++;
+            long dx = chunk.getChunkX() - playerChunkX;
+            long dz = chunk.getChunkZ() - playerChunkZ;
+            long distance = dx * dx + dz * dz;
+            if (distance < nearestDistance) {
+                candidate = chunk;
+                nearestDistance = distance;
+            }
         }
+
+        if (candidate != null) {
+            if (candidate.isMeshBuilt()) {
+                rebuildChunkAt(world, candidate);
+            } else {
+                lightingSystem.updateChunkLighting(candidate);
+                Model chunkModel = ChunkMesher.buildModel(world, candidate, currentDayNightCycle);
+                candidate.setModel(chunkModel);
+                candidate.setMeshBuilt(true);
+                refreshNeighborBorders(world, candidate.getChunkX(), candidate.getChunkZ());
+            }
+            return;
+        }
+
+        Chunk borderChunk = pollBorderRefresh(world);
+        if (borderChunk != null)
+            rebuildChunkAt(world, borderChunk);
+    }
+
+    private static Chunk pollBorderRefresh(World world) {
+        var iterator = borderRefreshQueue.iterator();
+        while (iterator.hasNext()) {
+            Chunk chunk = iterator.next();
+            iterator.remove();
+            if (world.getChunk(chunk.getChunkX(), chunk.getChunkZ()) == chunk && chunk.isMeshBuilt())
+                return chunk;
+        }
+        return null;
     }
 
     /**
@@ -58,6 +80,7 @@ public class WorldRenderer {
     public static void rebuildChunkAt(World world, Chunk chunk) {
         if (chunk == null) return;
 
+        long startedAt = System.nanoTime();
         lightingSystem.updateChunkLighting(chunk);
         Model newModel = ChunkMesher.buildModel(world, chunk, currentDayNightCycle);
 
@@ -65,32 +88,12 @@ public class WorldRenderer {
         chunk.setMeshBuilt(false);
         chunk.setModel(newModel);
         chunk.setMeshBuilt(true);
+        Debug.log("Rebuilt chunk mesh (" + chunk.getChunkX() + ", " + chunk.getChunkZ()
+                + ") in " + ((System.nanoTime() - startedAt) / 1_000_000.0) + " ms.");
     }
 
-    /**
-     * Rebuild the chunk that contains the given world block, then conditionally
-     * rebuild neighbors whose lighting was dirtied by the change.
-     *
-     * FIX: rebuildNeighboringChunksIfNeeded used to check isLightingDirty(), but
-     * every chunk has lightingDirty=true by default (set whenever setBlock() is called
-     * during world generation). That caused ALL neighbors of every changed chunk to be
-     * rebuilt. Now we only rebuild a neighbor if its lighting is dirty AND it already
-     * has a built mesh — newly generated chunks don't need neighbor-triggered rebuilds.
-     */
-    public static void rebuildChunkAtBlockChange(World world, int worldX, int worldY, int worldZ) {
-        int chunkX = Math.floorDiv(worldX, Chunk.SIZE_X);
-        int chunkZ = Math.floorDiv(worldZ, Chunk.SIZE_Z);
-        Chunk chunk = world.getChunk(chunkX, chunkZ);
-
-        if (chunk == null) return;
-
-        int localX = worldX - (chunkX * Chunk.SIZE_X);
-        int localY = worldY;
-        int localZ = worldZ - (chunkZ * Chunk.SIZE_Z);
-
-        lightingSystem.updateLightingAt(chunk, localX, localY, localZ);
-        rebuildChunkAt(world, chunk);
-        rebuildNeighboringChunksIfNeeded(world, chunkX, chunkZ);
+    public static Set<Chunk> updateBlockLighting(World world, List<Vector3i> changedBlocks) {
+        return lightingSystem.updateBlockLighting(changedBlocks);
     }
 
     /**
@@ -103,40 +106,22 @@ public class WorldRenderer {
      * naturally include correct border faces when they get built later.
      */
     private static void refreshNeighborBorders(World world, int chunkX, int chunkZ) {
-        int[][] neighbors = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-        for (int[] n : neighbors) {
-            Chunk neighbor = world.getChunk(chunkX + n[0], chunkZ + n[1]);
-            if (neighbor != null && neighbor.isMeshBuilt()) {
-                rebuildChunkAt(world, neighbor);
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0)
+                    continue;
+                Chunk neighbor = world.getChunk(chunkX + dx, chunkZ + dz);
+                if (neighbor != null && neighbor.isMeshBuilt())
+                    borderRefreshQueue.add(neighbor);
             }
-        }
-    }
-
-    private static void rebuildNeighboringChunksIfNeeded(World world, int chunkX, int chunkZ) {
-        int[][] neighbors = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-        for (int[] n : neighbors) {
-            Chunk neighbor = world.getChunk(chunkX + n[0], chunkZ + n[1]);
-            // FIX: Only rebuild neighbors that (a) are dirty AND (b) already have a mesh.
-            // New chunks have lightingDirty=true but no mesh yet; they'll be lit and
-            // meshed normally by generateVisibleMeshes — no need to force-rebuild them here.
-            if (neighbor != null && neighbor.isLightingDirty() && neighbor.isMeshBuilt()) {
-                rebuildChunkAt(world, neighbor);
-            }
-        }
-    }
-
-    public static void updateDayNightCycle(World world, float newDayNightCycle) {
-        if (Math.abs(currentDayNightCycle - newDayNightCycle) > 0.05f) {
-            currentDayNightCycle = newDayNightCycle;
-            // Pass as a uniform to cube.frag instead of rebuilding CPU meshes.
-        }
     }
 
     public static void renderWorld(World world, Renderer renderer, Camera camera, DirectionalLight light) {
         int cameraChunkX = (int) Math.floor(camera.getPosition().x / Chunk.SIZE_X);
         int cameraChunkZ = (int) Math.floor(camera.getPosition().z / Chunk.SIZE_Z);
 
-        for (Chunk chunk : world.getChunksNear(cameraChunkX, cameraChunkZ)) {
+        List<Chunk> visibleChunks = world.getChunksNear(cameraChunkX, cameraChunkZ);
+        for (Chunk chunk : visibleChunks) {
             if (!chunk.isMeshBuilt()) continue;
 
             Model model = chunk.getModel();
@@ -148,5 +133,6 @@ public class WorldRenderer {
 
             renderer.render(model, camera, light, chunk.getPosition(), chunkCenter, radius);
         }
+
     }
 }

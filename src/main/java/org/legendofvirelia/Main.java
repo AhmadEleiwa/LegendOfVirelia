@@ -1,17 +1,23 @@
 package org.legendofvirelia;
 
-import java.util.Queue;
-
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.engine.io.Window;
 import org.engine.loop.GameLoop;
 import org.engine.utils.Debug;
+import org.engine.utils.Logger;
+import org.joml.Vector3i;
 import org.legendofvirelia.client.ClientGameLogic;
 import org.legendofvirelia.server.ServerGameLogic;
 import org.legendofvirelia.shared.ClientWorldState;
 import org.legendofvirelia.shared.ServerWorldState;
-import org.legendofvirelia.shared.command.ClientCommand;
-import org.legendofvirelia.shared.command.ServerCommand;
+import org.legendofvirelia.shared.commands.BlockChange;
+import org.legendofvirelia.shared.commands.BlockChangesCommand;
+import org.legendofvirelia.shared.commands.BreakBlockCommand;
+import org.legendofvirelia.shared.commands.PlaceBlockCommand;
 
 public class Main {
     public static void main(String[] args) {
@@ -26,22 +32,19 @@ public class Main {
         ServerGameLogic serverLogic = new ServerGameLogic(serverWorld);
         Thread serverThread = new Thread(() -> {
             serverLogic.init();
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    // Process client actions on server
-                    bridge.processClientToServer();
-                    
-                    // Update server world
-                    serverLogic.update(1f / 20f); // 20 TPS
-                    
-                    // Send server responses back to client
-                    bridge.processServerToClient();
-                    
-                    Thread.sleep(50); // 20 TPS
+                    bridge.transferClientToServer();
+                    serverLogic.update(1f / 20f);
+                    bridge.transferServerToClient();
+                } catch (RuntimeException e) {
+                    Logger.log("Server tick failed; skipping this tick.", e);
+                }
+
+                try {
+                    Thread.sleep(50);
                 } catch (InterruptedException e) {
-                    break;
-                } catch (Exception e) {
-                    e.printStackTrace();
+                    Thread.currentThread().interrupt();
                 }
             }
         }, "ServerThread");
@@ -74,23 +77,56 @@ public class Main {
         
         }
         
-        public void processClientToServer() {
-            // Transfer actions from client to server
-            Queue<ServerCommand> clientActions = clientWorld.getOutgoingCommands();
-            ServerCommand action;
-            while ((action = clientActions.poll()) != null) {
-                serverWorld.receiveServerCommands(action);
+        public void transferClientToServer() {
+            BlockChangeBatch batch = new BlockChangeBatch();
+            var clientActions = clientWorld.getOutgoingCommands();
+            var action = clientActions.poll();
+            while (action != null) {
+                if (action instanceof PlaceBlockCommand place) {
+                    batch.add(place.position.x, place.position.y, place.position.z, place.blockId);
+                } else if (action instanceof BreakBlockCommand breaking) {
+                    batch.add(breaking.position.x, breaking.position.y, breaking.position.z, 0);
+                } else {
+                    flushBlockChanges(batch);
+                    serverWorld.receiveServerCommands(action);
+                }
+                action = clientActions.poll();
             }
+            flushBlockChanges(batch);
         }
         
-        public void processServerToClient() {
-            // Transfer server responses back to client
-            Queue<ClientCommand> serverActions = serverWorld.getOutgoingCommands();
-            ClientCommand action;
-            
-            while ((action = serverActions.poll()) != null) {
-                Debug.log(action.toString());
+        private void flushBlockChanges(BlockChangeBatch batch) {
+            if (!batch.changes.isEmpty()) {
+                int count = batch.changes.size();
+                serverWorld.receiveServerCommands(new BlockChangesCommand(batch.toList()));
+                batch.changes.clear();
+                Debug.log("Bridge queued " + count + " block edits for the server.");
+            }
+        }
+
+        public void transferServerToClient() {
+            var serverActions = serverWorld.getOutgoingCommands();
+            var action = serverActions.poll();
+            int transferred = 0;
+            while (action != null) {
                 clientWorld.receiveServerCommands(action);
+                transferred++;
+                action = serverActions.poll();
+            }
+            if (transferred > 0)
+                Debug.log("Bridge delivered " + transferred + " server updates to the client queue.");
+        }
+
+        private static class BlockChangeBatch {
+            private final Map<Vector3i, BlockChange> changes = new LinkedHashMap<>();
+
+            private void add(int x, int y, int z, int blockId) {
+                Vector3i position = new Vector3i(x, y, z);
+                changes.put(position, new BlockChange(x, y, z, blockId));
+            }
+
+            private List<BlockChange> toList() {
+                return new ArrayList<>(changes.values());
             }
         }
     }

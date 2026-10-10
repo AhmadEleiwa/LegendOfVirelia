@@ -22,23 +22,24 @@ public class LightedMesh extends Mesh {
      * @param indices   An array of indices defining the triangles.
      */
     public LightedMesh(float[] positions, float[] texCoords, float[] lighting, int[] indices) {
-        super(positions, texCoords, indices);
-        this.lighting = lighting;
-        
-        // Re-setup the mesh with lighting data
-        setupLightedMesh(positions, texCoords, lighting, indices);
+        this(positions, texCoords, lighting, new float[lighting.length], indices);
     }
 
-    private void setupLightedMesh(float[] positions, float[] texCoords, float[] lighting, int[] indices) {
-        // Create interleaved array: pos(3) + tex(2) + normal(3) + light(1) = 9 floats per vertex
+    public LightedMesh(float[] positions, float[] texCoords, float[] lighting,
+                       float[] emissive, int[] indices) {
+        super(positions, texCoords, indices);
+        this.lighting = lighting;
+        setupLightedMesh(positions, texCoords, lighting, emissive, indices);
+    }
+
+    private void setupLightedMesh(float[] positions, float[] texCoords, float[] lighting,
+                                  float[] emissive, int[] indices) {
         int numVertices = positions.length / 3;
-        float[] interleavedVertices = new float[numVertices * 9];
-        
-        // Generate normals automatically (reuse from parent class)
+        float[] interleavedVertices = new float[numVertices * 10];
         float[] normals = generateNormals(positions, indices);
         
         for (int i = 0; i < numVertices; i++) {
-            int destIndex = i * 9;
+            int destIndex = i * 10;
             int posIndex = i * 3;
             int texIndex = i * 2;
             
@@ -58,6 +59,7 @@ public class LightedMesh extends Mesh {
             
             // Lighting
             interleavedVertices[destIndex + 8] = lighting[i];
+            interleavedVertices[destIndex + 9] = emissive[i];
         }
         
         // Setup the VAO with new layout
@@ -79,8 +81,7 @@ public class LightedMesh extends Mesh {
         ib.put(indices).flip();
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, ib, GL_STATIC_DRAW);
 
-        // Define the vertex attributes (9 floats per vertex)
-        int stride = 9 * Float.BYTES;
+        int stride = 10 * Float.BYTES;
         
         // Position attribute (layout location 0)
         glVertexAttribPointer(0, 3, GL_FLOAT, false, stride, 0);
@@ -97,6 +98,8 @@ public class LightedMesh extends Mesh {
         // Lighting attribute (layout location 3)
         glVertexAttribPointer(3, 1, GL_FLOAT, false, stride, 8 * Float.BYTES);
         glEnableVertexAttribArray(3);
+        glVertexAttribPointer(4, 1, GL_FLOAT, false, stride, 9 * Float.BYTES);
+        glEnableVertexAttribArray(4);
 
         // Unbind
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -120,4 +123,5 @@ public class LightedMesh extends Mesh {
     public float[] getLighting() {
         return lighting;
     }
+
 }

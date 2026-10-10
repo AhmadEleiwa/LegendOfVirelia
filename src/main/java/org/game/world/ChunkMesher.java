@@ -23,6 +23,7 @@ public class ChunkMesher {
     public static Model buildModel(World world, Chunk chunk, float dayNightCycle) {
         List<Float> vertices = new ArrayList<>();
         List<Float> texCoords = new ArrayList<>();
+        List<Float> emissive = new ArrayList<>();
         List<Integer> indices = new ArrayList<>();
 
         int chunkWorldX = chunk.getChunkX() * Chunk.SIZE_X;
@@ -34,33 +35,35 @@ public class ChunkMesher {
                 for (int z = 0; z < Chunk.SIZE_Z; z++) {
                     int blockId = chunk.getBlock(x, y, z);
                     if (blockId == 0) continue;
+                    Block block = BlockRegistry.getBlock(blockId);
+                    if (block == null || block.isTransparent()) continue;
 
                     int wx = chunkWorldX + x;
                     int wy = chunkWorldY + y;
                     int wz = chunkWorldZ + z;
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz,  1,  0,  0))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.RIGHT_FACE,  blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.RIGHT_FACE,  blockId, dayNightCycle);
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz, -1,  0,  0))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.LEFT_FACE,   blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.LEFT_FACE,   blockId, dayNightCycle);
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz,  0,  1,  0))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.TOP_FACE,    blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.TOP_FACE,    blockId, dayNightCycle);
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz,  0, -1,  0))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.BOTTOM_FACE, blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.BOTTOM_FACE, blockId, dayNightCycle);
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz,  0,  0,  1))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.FRONT_FACE,  blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.FRONT_FACE,  blockId, dayNightCycle);
 
                     if (isFaceVisible(world, chunk, x, y, z, wx, wy, wz,  0,  0, -1))
-                        addFaceWithLighting(vertices, texCoords, indices, chunk, x, y, z, Quad.FaceType.BACK_FACE,   blockId, dayNightCycle);
+                        addFaceWithLighting(vertices, texCoords, emissive, indices, chunk, x, y, z, Quad.FaceType.BACK_FACE,   blockId, dayNightCycle);
                 }
             }
         }
 
-        Mesh mesh = createMeshWithLighting(vertices, texCoords, indices);
+        Mesh mesh = createMeshWithLighting(vertices, texCoords, emissive, indices);
         return new Model(mesh);
     }
 
@@ -78,7 +81,7 @@ public class ChunkMesher {
      *  - Neighbor is in an adjacent chunk → look up that chunk directly
      *      • chunk not loaded             → CULL (it will draw its own face when it loads)
      *      • chunk loaded, block opaque   → CULL
-     *      • chunk loaded, block transparent (air/water/glass) → DRAW
+     *      • chunk loaded, block transparent (such as air) → DRAW
      */
     private static boolean isFaceVisible(World world, Chunk chunk,
                                          int lx, int ly, int lz,   // local coords in chunk
@@ -121,7 +124,7 @@ public class ChunkMesher {
     // -------------------------------------------------------------------------
 
     private static void addFaceWithLighting(
-            List<Float> vertices, List<Float> texCoords, List<Integer> indices,
+            List<Float> vertices, List<Float> texCoords, List<Float> emissive, List<Integer> indices,
             Chunk chunk, int x, int y, int z,
             Quad.FaceType faceType, int blockId, float dayNightCycle) {
 
@@ -149,12 +152,18 @@ public class ChunkMesher {
             float vy = quad.positions[i + 1] + y;
             float vz = quad.positions[i + 2] + z;
 
-            float lightLevel = getVertexLightLevel(chunk, x, y, z, faceType, dayNightCycle);
+            float lightLevel = getVertexLightLevel(
+                    chunk, x, y, z,
+                    (int) quad.positions[i],
+                    (int) quad.positions[i + 1],
+                    (int) quad.positions[i + 2],
+                    faceType, dayNightCycle);
 
             vertices.add(vx);
             vertices.add(vy);
             vertices.add(vz);
             vertices.add(lightLevel);
+            emissive.add(block.getLightLevel() > 0 ? 1.0f : 0.0f);
         }
 
         for (int i = 0; i < quad.texCoords.length; i += 2) {
@@ -176,22 +185,58 @@ public class ChunkMesher {
     }
 
     private static float getVertexLightLevel(Chunk chunk, int blockX, int blockY, int blockZ,
+                                             int cornerX, int cornerY, int cornerZ,
                                              Quad.FaceType faceType, float dayNightCycle) {
         if (lightingSystem == null) return 1.0f;
 
-        int[] offset = getFaceOffset(faceType);
-        int sampleX = blockX + offset[0];
-        int sampleY = blockY + offset[1];
-        int sampleZ = blockZ + offset[2];
+        int[] faceOffset = getFaceOffset(faceType);
+        int[] sample = {
+                blockX + faceOffset[0],
+                blockY + faceOffset[1],
+                blockZ + faceOffset[2]
+        };
+        int[] corner = {cornerX, cornerY, cornerZ};
+        int[] tangentAxes = getFaceTangentAxes(faceType);
+        int firstStart = corner[tangentAxes[0]] == 0 ? -1 : 0;
+        int secondStart = corner[tangentAxes[1]] == 0 ? -1 : 0;
+        float totalLight = 0.0f;
 
-        byte sunlight   = lightingSystem.getSunlightWithNeighbors(chunk, sampleX, sampleY, sampleZ);
-        byte blocklight = lightingSystem.getBlocklightWithNeighbors(chunk, sampleX, sampleY, sampleZ);
+        for (int firstOffset = firstStart; firstOffset <= firstStart + 1; firstOffset++) {
+            for (int secondOffset = secondStart; secondOffset <= secondStart + 1; secondOffset++) {
+                int sampleX = sample[0];
+                int sampleY = sample[1];
+                int sampleZ = sample[2];
+                if (tangentAxes[0] == 0) sampleX += firstOffset;
+                if (tangentAxes[0] == 1) sampleY += firstOffset;
+                if (tangentAxes[0] == 2) sampleZ += firstOffset;
+                if (tangentAxes[1] == 0) sampleX += secondOffset;
+                if (tangentAxes[1] == 1) sampleY += secondOffset;
+                if (tangentAxes[1] == 2) sampleZ += secondOffset;
 
-        float effectiveSunLight = sunlight * dayNightCycle;
-        float maxLight = Math.max(effectiveSunLight, blocklight);
-        maxLight = Math.max(maxLight, 2.0f);
+                float sunlight = lightingSystem.getSunlightWithNeighbors(chunk, sampleX, sampleY, sampleZ)
+                        * dayNightCycle;
+                float blocklight = lightingSystem.getBlocklightWithNeighbors(chunk, sampleX, sampleY, sampleZ);
+                totalLight += Math.max(Math.max(sunlight, blocklight), 2.0f);
+            }
+        }
 
-        return maxLight / 15.0f;
+        return totalLight / (4.0f * ChunkLightingSystem.MAX_LIGHT_LEVEL);
+    }
+
+    private static int[] getFaceTangentAxes(Quad.FaceType faceType) {
+        switch (faceType) {
+            case LEFT_FACE:
+            case RIGHT_FACE:
+                return new int[] {1, 2};
+            case TOP_FACE:
+            case BOTTOM_FACE:
+                return new int[] {0, 2};
+            case FRONT_FACE:
+            case BACK_FACE:
+                return new int[] {0, 1};
+            default:
+                throw new IllegalArgumentException("Unknown face type: " + faceType);
+        }
     }
 
     private static int[] getFaceOffset(Quad.FaceType faceType) {
@@ -206,7 +251,8 @@ public class ChunkMesher {
         }
     }
 
-    private static Mesh createMeshWithLighting(List<Float> vertices, List<Float> texCoords, List<Integer> indices) {
+    private static Mesh createMeshWithLighting(List<Float> vertices, List<Float> texCoords,
+                                               List<Float> emissive, List<Integer> indices) {
         float[] positions = new float[(vertices.size() / 4) * 3];
         float[] lighting  = new float[vertices.size() / 4];
 
@@ -218,9 +264,10 @@ public class ChunkMesher {
         }
 
         float[] texCoordArray = listToFloatArray(texCoords);
+        float[] emissiveArray = listToFloatArray(emissive);
         int[]   indexArray    = listToIntArray(indices);
 
-        return new LightedMesh(positions, texCoordArray, lighting, indexArray);
+        return new LightedMesh(positions, texCoordArray, lighting, emissiveArray, indexArray);
     }
 
     private static float[] getFacePixels(Block block, Quad.FaceType faceType) {

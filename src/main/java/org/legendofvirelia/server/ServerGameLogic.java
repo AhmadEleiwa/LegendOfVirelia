@@ -12,16 +12,12 @@ public class ServerGameLogic implements ServerSide {
 
     @Override
     public void init() {
-        // Initialize server world
         world.init();
-        Debug.log("Server initialized");
-        // generator
+        Debug.log("Server world state initialized.");
     }
 
     @Override
     public void update(float interval) {
-        // Server update - the WorldState handles all the action processing
-        // including validation and sending confirmations back to clients
         world.update(interval);
     }
 }

@@ -4,7 +4,9 @@ package org.legendofvirelia.client;
 import static org.lwjgl.opengl.GL11.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.engine.io.Input;
 import org.engine.io.Window;
@@ -17,17 +19,17 @@ import org.engine.utils.Logger;
 import org.engine.utils.Resource;
 import org.game.core.GameObject;
 import org.game.entities.Camera;
+import org.game.entities.PlayerPhysics;
 import org.game.lighting.DirectionalLight;
 
 import org.game.ui.ColorRect;
-import org.game.ui.Container;
 import org.game.ui.Label;
+import org.game.ui.UIElement;
 import org.game.utils.AtlasBuilder;
 import org.game.world.Block;
 import org.game.world.BlockPlacer;
 import org.game.world.BlockRegistry;
 import org.game.world.Blocks;
-import org.game.world.WorldRenderer;
 import org.joml.Vector2f;
 import org.legendofvirelia.shared.ClientWorldState;
 import org.legendofvirelia.shared.commands.BreakBlockCommand;
@@ -40,10 +42,34 @@ public class ClientGameLogic implements ClientSide {
     private Renderer renderer;
     private UIRenderer uiRenderer;
     private Camera camera;
+    private PlayerPhysics playerPhysics;
     public float timer = 0;
     public float cooldown = 0.1f; // Fast response for building
     private List<GameObject> objects;
-    private Container ui;
+    private final List<UIElement> hudElements = new ArrayList<>();
+    private Label statsLabel;
+    private Label hotbarLabel;
+    private ColorRect statsBackground;
+    private ColorRect crosshairHorizontal;
+    private ColorRect crosshairVertical;
+    private ColorRect crosshairHorizontalCore;
+    private ColorRect crosshairVerticalCore;
+    private ColorRect[] hotbarSlots;
+    private ColorRect[] hotbarSwatches;
+    private ColorRect[] selectedSlotBorder;
+    private final int[] hotbarBlockIds = new int[3];
+    private final String[] hotbarBlockNames = {"DIRT", "DIRT2", "TORCH"};
+    private final float[][] hotbarColors = {
+            {0.45f, 0.29f, 0.16f},
+            {0.42f, 0.43f, 0.46f},
+            {0.95f, 0.58f, 0.12f}
+    };
+    private int selectedHotbarIndex;
+    private int hudWidth;
+    private int hudHeight;
+    private float fpsElapsed;
+    private int fpsFrames;
+    private float hudRefreshElapsed;
     // Building system state
     private int selectedBlockId = 1;
     private boolean buildMode = true;
@@ -63,6 +89,7 @@ public class ClientGameLogic implements ClientSide {
     public void init(Window window) {
         this.window = window;
         camera = new Camera((float) (window.getWidth()) / (float) (window.getHeight()));
+        playerPhysics = new PlayerPhysics(worldState.getCurrentWorld());
         prev_pos = new Vector2f(camera.position.x, camera.position.z);
         var vs = Resource.loadText("shaders/cube.vert");
         var fs = Resource.loadText("shaders/cube.frag");
@@ -87,20 +114,16 @@ public class ClientGameLogic implements ClientSide {
         Debug.log("UI shaders loaded: " + (uiv != null && uif != null));
         uishader = new ShaderProgram(uiv, uif);
 
-        // Create a semi-transparent red rectangle for UI
-        // healthBar =
-
-        ui = new Container(0, 80, 180, 600);
-        ui.addChild(new ColorRect(10, 10, 200, 30, 1f, 0f, 0f, 1f));
-        // Position and scale the UI rectangle
-        Label label = new Label(10, 10, 200, 30, "Health: 100%", 16);
-        ui.addChild(label);
         renderer = new Renderer(shader);
         uiRenderer = new UIRenderer(uishader);
         BlockRegistry.register("dirt", Blocks.DIRT.get());
         BlockRegistry.register("torch", Blocks.Torch.get());
         BlockRegistry.register("dirt2", Blocks.DIRT2.get());
-        BlockRegistry.register("water", Blocks.WATER.get());
+        hotbarBlockIds[0] = BlockRegistry.getId("dirt");
+        hotbarBlockIds[1] = BlockRegistry.getId("dirt2");
+        hotbarBlockIds[2] = BlockRegistry.getId("torch");
+        selectedBlockId = hotbarBlockIds[selectedHotbarIndex];
+        createHud();
 
         sun = DirectionalLight.createSunlight();
         worldState.init();
@@ -119,22 +142,146 @@ public class ClientGameLogic implements ClientSide {
         if (Input.isKeyReleased(Input.KEY_Y)) {
             Debug.enable = !Debug.enable;
         }
+        if (Input.isKeyPressed(Input.KEY_R)) {
+            camera.reset();
+            playerPhysics.reset();
+        }
 
         if (Input.isKeyPressed(Input.KEY_B)) {
             buildMode = !buildMode;
             Debug.log("Build mode: " + (buildMode ? "PLACE blocks" : "BREAK blocks"));
         }
 
-        if (Input.isKeyPressed(Input.KEY_P)) {
-            ui.setPosition(ui.getX() + 5, ui.getY());
-        }
-        if (Input.isKeyPressed(Input.KEY_O)) {
-            ui.setSize(ui.getWidth() - 1, ui.getHeight());
-        }
-        if (Input.isKeyPressed(Input.KEY_L)) {
-            ui.setSize(ui.getWidth() + 1, ui.getHeight());
-        }
+        if (Input.isKeyPressed(Input.KEY_1)) selectHotbarSlot(0);
+        if (Input.isKeyPressed(Input.KEY_2)) selectHotbarSlot(1);
+        if (Input.isKeyPressed(Input.KEY_3)) selectHotbarSlot(2);
+        if (Input.isKeyPressed(Input.KEY_4)) selectHotbarSlot(3);
         handleBuildingInput();
+    }
+
+    private void createHud() {
+        statsBackground = new ColorRect(8, 8, 430, 30, 0.02f, 0.03f, 0.05f, 0.72f);
+        statsLabel = new Label(8, 8, 430, 30, "", 14);
+        crosshairHorizontal = new ColorRect(0, 0, 20, 4, 0f, 0f, 0f, 0.75f);
+        crosshairVertical = new ColorRect(0, 0, 4, 20, 0f, 0f, 0f, 0.75f);
+        crosshairHorizontalCore = new ColorRect(0, 0, 14, 2, 1f, 1f, 1f, 0.95f);
+        crosshairVerticalCore = new ColorRect(0, 0, 2, 14, 1f, 1f, 1f, 0.95f);
+        hudElements.add(statsBackground);
+        hudElements.add(statsLabel);
+        hudElements.add(crosshairHorizontal);
+        hudElements.add(crosshairVertical);
+        hudElements.add(crosshairHorizontalCore);
+        hudElements.add(crosshairVerticalCore);
+
+        hotbarSlots = new ColorRect[hotbarBlockIds.length];
+        hotbarSwatches = new ColorRect[hotbarBlockIds.length];
+        selectedSlotBorder = new ColorRect[4];
+        for (int i = 0; i < hotbarBlockIds.length; i++) {
+            hotbarSlots[i] = new ColorRect(0, 0, 48, 48, 0.04f, 0.05f, 0.07f, 0.88f);
+            hotbarSwatches[i] = new ColorRect(0, 0, 28, 28,
+                    hotbarColors[i][0], hotbarColors[i][1], hotbarColors[i][2], 1f);
+            hudElements.add(hotbarSlots[i]);
+            hudElements.add(hotbarSwatches[i]);
+        }
+        for (int i = 0; i < selectedSlotBorder.length; i++) {
+            selectedSlotBorder[i] = new ColorRect(0, 0, 48, 3, 1f, 0.82f, 0.25f, 1f);
+            hudElements.add(selectedSlotBorder[i]);
+        }
+        hotbarLabel = new Label(0, 0, 500, 22, "", 14);
+        hudElements.add(hotbarLabel);
+        layoutHud(window.getWidth(), window.getHeight());
+        updateHotbarLabel();
+    }
+
+    private void selectHotbarSlot(int index) {
+        if (index < 0 || index >= hotbarBlockIds.length || selectedHotbarIndex == index)
+            return;
+        selectedHotbarIndex = index;
+        selectedBlockId = hotbarBlockIds[index];
+        updateHotbarLabel();
+        updateSelectedSlotBorder();
+    }
+
+    private void updateHotbarLabel() {
+        if (hotbarLabel != null) {
+            hotbarLabel.setText("SELECTED: " + hotbarBlockNames[selectedHotbarIndex]
+                    + "     1 DIRT  2 DIRT2  3 TORCH");
+        }
+    }
+
+    private void layoutHud(int width, int height) {
+        if (width == hudWidth && height == hudHeight)
+            return;
+        hudWidth = width;
+        hudHeight = height;
+
+        int centerX = width / 2;
+        int centerY = height / 2;
+        crosshairHorizontal.setPosition(centerX - 10, centerY - 2);
+        crosshairVertical.setPosition(centerX - 2, centerY - 10);
+        crosshairHorizontalCore.setPosition(centerX - 7, centerY - 1);
+        crosshairVerticalCore.setPosition(centerX - 1, centerY - 7);
+
+        int slotWidth = 48;
+        int slotGap = 6;
+        int totalWidth = hotbarBlockIds.length * slotWidth
+                + (hotbarBlockIds.length - 1) * slotGap;
+        int firstSlotX = centerX - totalWidth / 2;
+        int slotY = height - 68;
+        for (int i = 0; i < hotbarBlockIds.length; i++) {
+            int slotX = firstSlotX + i * (slotWidth + slotGap);
+            hotbarSlots[i].setPosition(slotX, slotY);
+            hotbarSwatches[i].setPosition(slotX + 10, slotY + 10);
+        }
+
+        updateSelectedSlotBorder(firstSlotX, slotY, slotWidth, slotGap);
+        hotbarLabel.setPosition(centerX - 250, slotY - 25);
+    }
+
+    private void updateSelectedSlotBorder() {
+        int slotWidth = 48;
+        int slotGap = 6;
+        int totalWidth = hotbarBlockIds.length * slotWidth
+                + (hotbarBlockIds.length - 1) * slotGap;
+        updateSelectedSlotBorder((hudWidth - totalWidth) / 2, hudHeight - 68, slotWidth, slotGap);
+    }
+
+    private void updateSelectedSlotBorder(int firstSlotX, int slotY, int slotWidth, int slotGap) {
+        int selectedX = firstSlotX + selectedHotbarIndex * (slotWidth + slotGap);
+        selectedSlotBorder[0].setPosition(selectedX, slotY);
+        setSizeIfChanged(selectedSlotBorder[0], slotWidth, 3);
+        selectedSlotBorder[1].setPosition(selectedX, slotY + slotWidth - 3);
+        setSizeIfChanged(selectedSlotBorder[1], slotWidth, 3);
+        selectedSlotBorder[2].setPosition(selectedX, slotY);
+        setSizeIfChanged(selectedSlotBorder[2], 3, slotWidth);
+        selectedSlotBorder[3].setPosition(selectedX + slotWidth - 3, slotY);
+        setSizeIfChanged(selectedSlotBorder[3], 3, slotWidth);
+    }
+
+    private static void setSizeIfChanged(UIElement element, int width, int height) {
+        if (element.getWidth() != width || element.getHeight() != height)
+            element.setSize(width, height);
+    }
+
+    private void updateHud(float delta) {
+        fpsElapsed += delta;
+        fpsFrames++;
+        hudRefreshElapsed += delta;
+        if (hudRefreshElapsed < 0.25f)
+            return;
+
+        int fps = fpsElapsed > 0f ? Math.round(fpsFrames / fpsElapsed) : 0;
+        fpsElapsed = 0f;
+        fpsFrames = 0;
+        hudRefreshElapsed = 0f;
+
+        Runtime runtime = Runtime.getRuntime();
+        long usedRamMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+        long maxRamMb = runtime.maxMemory() / (1024 * 1024);
+        statsLabel.setText(String.format(Locale.ROOT,
+                "FPS %d   XYZ %.1f, %.1f, %.1f   RAM %d/%d MB",
+                fps, camera.position.x, camera.position.y, camera.position.z,
+                usedRamMb, maxRamMb));
     }
 
     private void handleBuildingInput() {
@@ -166,16 +313,18 @@ public class ClientGameLogic implements ClientSide {
 
     @Override
     public void placeBlock() {
-        BlockPlacer.RaycastResult result = BlockPlacer.raycast(worldState.getCurrentWorld(), camera, 5f);
+        BlockPlacer.RaycastResult result = BlockPlacer.raycastForPlacement(
+                worldState.getCurrentWorld(), camera, 5f);
 
         if (result.hit && result.placePosition != null) {
+            if (playerPhysics.overlapsPlayer(camera, result.placePosition)) {
+                Debug.log("Cannot place a block inside the player.");
+                return;
+            }
             // Use the new client-side prediction system
-            Debug.log(BlockRegistry.getId("dirt"));
-            Debug.log(BlockRegistry.getId("torch"));
-
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, BlockRegistry.getId("torch"));
+            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, selectedBlockId);
             worldState.sendCommand(action);
-            Debug.log("Block placed immediately with client-side prediction: " + result.placePosition);
+            camera.triggerImpact(0.65f);
         } else {
             Debug.log("No valid placement position found");
         }
@@ -188,7 +337,7 @@ public class ClientGameLogic implements ClientSide {
             // Break block by placing air (blockId = 0)
             BreakBlockCommand action = new BreakBlockCommand(result.blockPosition);
             worldState.sendCommand(action);
-            Debug.log("Block broken immediately with client-side prediction: " + result.blockPosition);
+            camera.triggerImpact(0.45f);
         }
     }
 
@@ -196,6 +345,9 @@ public class ClientGameLogic implements ClientSide {
     public void update(float delta) {
         camera.update(delta);
         worldState.update(delta); // Handles client-side prediction and server reconciliation
+        playerPhysics.update(camera, delta);
+        camera.smoothViewPosition(delta);
+        updateHud(delta);
         timer += delta;
         // Update UI elements if needed
         time = time == 1 ? 0 : Math.clamp(time + delta / 100f, 0f, 1f);
@@ -227,21 +379,24 @@ public class ClientGameLogic implements ClientSide {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // 2. Render 3D world
-        renderer.render(objects, camera, sun);
+        // renderer.render(objects, camera, sun);
         worldState.render(renderer, camera, sun);
         // 3. Render 2D UI on top
         renderBuildingUI();
+
+        // Debug.log(GL_2D);
+
     }
 
     private void renderBuildingUI() {
-        // Render UI elements
-        // uiRenderer.render(healthBar, 1280, 720);
-        ui.draw(uiRenderer, 1280, 720);
+        layoutHud(window.getWidth(), window.getHeight());
+        for (UIElement element : hudElements)
+            element.draw(uiRenderer, window.getWidth(), window.getHeight());
     }
 
     @Override
     public void cleanup() {
-        // Cleanup resources
-
+        for (UIElement element : hudElements)
+            element.destroy();
     }
 }

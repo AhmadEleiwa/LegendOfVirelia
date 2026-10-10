@@ -1,11 +1,17 @@
 package org.game.world;
 
 import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Queue;
+import java.util.Set;
+import org.joml.Vector3i;
 
 public class ChunkLightingSystem {
-    private static final int MAX_LIGHT_LEVEL = 15;
+    public static final int MAX_LIGHT_LEVEL = 15;
     private World world;
+    private boolean blockLightingInitialized;
 
     public ChunkLightingSystem(World world) {
         this.world = world;
@@ -36,28 +42,143 @@ public class ChunkLightingSystem {
     /**
      * Calculate block light from light sources
      */
-    public void calculateBlockLight(Chunk chunk) {
-        // Reset all block light
-        for (int x = 0; x < Chunk.SIZE_X; x++) {
-            for (int y = 0; y < Chunk.SIZE_Y; y++) {
-                for (int z = 0; z < Chunk.SIZE_Z; z++) {
-                    chunk.setBlocklight(x, y, z, (byte) 0);
-                }
-            }
-        }
+    private void calculateBlockLight() {
+        if (blockLightingInitialized)
+            return;
 
-        // Find light sources and propagate light
-        for (int x = 0; x < Chunk.SIZE_X; x++) {
-            for (int y = 0; y < Chunk.SIZE_Y; y++) {
-                for (int z = 0; z < Chunk.SIZE_Z; z++) {
-                    int lightLevel = chunk.getLightEmission(x, y, z);
-                    if (lightLevel > 0) {
-                        chunk.setBlocklight(x, y, z, (byte) lightLevel);
-                        propagateBlockLight(chunk, x, y, z, lightLevel);
+        Queue<LightNode> lightQueue = new ArrayDeque<>();
+        for (Chunk loadedChunk : world.getAllChunks()) {
+            for (int x = 0; x < Chunk.SIZE_X; x++) {
+                for (int y = 0; y < Chunk.SIZE_Y; y++) {
+                    for (int z = 0; z < Chunk.SIZE_Z; z++) {
+                        if (loadedChunk.getBlocklight(x, y, z) != 0) {
+                            loadedChunk.setLightingDirty(true);
+                            loadedChunk.setBlocklight(x, y, z, (byte) 0);
+                        }
+
+                        int lightLevel = loadedChunk.getLightEmission(x, y, z);
+                        if (lightLevel > 0) {
+                            loadedChunk.setBlocklight(x, y, z, (byte) lightLevel);
+                            lightQueue.offer(new LightNode(x, y, z, lightLevel, loadedChunk));
+                        }
                     }
                 }
             }
         }
+
+        propagateLight(lightQueue, false);
+        blockLightingInitialized = true;
+    }
+
+    /**
+     * Recalculate only the block-light volume that can be affected by these edits.
+     */
+    public Set<Chunk> updateBlockLighting(List<Vector3i> changedBlocks) {
+        Set<Chunk> dirtyChunks = new LinkedHashSet<>();
+        if (changedBlocks.isEmpty())
+            return dirtyChunks;
+
+        Set<Long> sunlightColumns = new HashSet<>();
+        Set<BlockPosition> affectedBlocks = new HashSet<>();
+        for (Vector3i changed : changedBlocks) {
+            sunlightColumns.add(((long) changed.x << 32) | (changed.z & 0xffffffffL));
+            for (int dx = -MAX_LIGHT_LEVEL + 1; dx < MAX_LIGHT_LEVEL; dx++) {
+                for (int dy = -MAX_LIGHT_LEVEL + 1; dy < MAX_LIGHT_LEVEL; dy++) {
+                    int remainingDistance = MAX_LIGHT_LEVEL - 1 - Math.abs(dx) - Math.abs(dy);
+                    if (remainingDistance < 0)
+                        continue;
+                    for (int dz = -remainingDistance; dz <= remainingDistance; dz++) {
+                        BlockPosition position = getBlockPosition(
+                                changed.x + dx, changed.y + dy, changed.z + dz);
+                        if (position != null)
+                            affectedBlocks.add(position);
+                    }
+                }
+            }
+        }
+
+        for (long column : sunlightColumns) {
+            int worldX = (int) (column >> 32);
+            int worldZ = (int) column;
+            int chunkX = Math.floorDiv(worldX, Chunk.SIZE_X);
+            int chunkZ = Math.floorDiv(worldZ, Chunk.SIZE_Z);
+            Chunk chunk = world.getChunk(chunkX, chunkZ);
+            if (chunk == null)
+                continue;
+
+            int localX = Math.floorMod(worldX, Chunk.SIZE_X);
+            int localZ = Math.floorMod(worldZ, Chunk.SIZE_Z);
+            byte sunlight = MAX_LIGHT_LEVEL;
+            for (int y = Chunk.SIZE_Y - 1; y >= 0; y--) {
+                if (!chunk.isTransparent(localX, y, localZ))
+                    sunlight = 0;
+                chunk.setSunlight(localX, y, localZ, sunlight);
+            }
+            dirtyChunks.add(chunk);
+        }
+
+        Queue<LightNode> lightQueue = new ArrayDeque<>();
+        for (BlockPosition position : affectedBlocks) {
+            if (position.chunk.getBlocklight(position.x, position.y, position.z) != 0) {
+                position.chunk.setBlocklight(position.x, position.y, position.z, (byte) 0);
+                dirtyChunks.add(position.chunk);
+            }
+
+            int emission = position.chunk.getLightEmission(position.x, position.y, position.z);
+            if (emission > 0) {
+                byte level = (byte) Math.min(MAX_LIGHT_LEVEL, emission);
+                position.chunk.setBlocklight(position.x, position.y, position.z, level);
+                lightQueue.offer(new LightNode(position.x, position.y, position.z, level, position.chunk));
+                dirtyChunks.add(position.chunk);
+            }
+        }
+
+        for (Vector3i changed : changedBlocks) {
+            for (int dx = -MAX_LIGHT_LEVEL; dx <= MAX_LIGHT_LEVEL; dx++) {
+                for (int dy = -MAX_LIGHT_LEVEL; dy <= MAX_LIGHT_LEVEL; dy++) {
+                    int remainingDistance = MAX_LIGHT_LEVEL - Math.abs(dx) - Math.abs(dy);
+                    if (remainingDistance < 0)
+                        continue;
+
+                    addOutsideLightNode(changed.x + dx, changed.y + dy,
+                            changed.z - remainingDistance, affectedBlocks, lightQueue);
+                    if (remainingDistance != 0) {
+                        addOutsideLightNode(changed.x + dx, changed.y + dy,
+                                changed.z + remainingDistance, affectedBlocks, lightQueue);
+                    }
+                }
+            }
+        }
+
+        propagateLight(lightQueue, false, dirtyChunks);
+        for (Chunk chunk : dirtyChunks)
+            chunk.markLightingClean();
+        return dirtyChunks;
+    }
+
+    private void addOutsideLightNode(int worldX, int y, int worldZ,
+                                     Set<BlockPosition> affectedBlocks, Queue<LightNode> queue) {
+        BlockPosition position = getBlockPosition(worldX, y, worldZ);
+        if (position == null || affectedBlocks.contains(position))
+            return;
+
+        int light = position.chunk.getBlocklight(position.x, position.y, position.z);
+        if (light > 1)
+            queue.offer(new LightNode(position.x, position.y, position.z, light, position.chunk));
+    }
+
+    private BlockPosition getBlockPosition(int worldX, int y, int worldZ) {
+        if (y < 0 || y >= Chunk.SIZE_Y)
+            return null;
+
+        int chunkX = Math.floorDiv(worldX, Chunk.SIZE_X);
+        int chunkZ = Math.floorDiv(worldZ, Chunk.SIZE_Z);
+        Chunk chunk = world.getChunk(chunkX, chunkZ);
+        if (chunk == null)
+            return null;
+
+        return new BlockPosition(chunk, Math.floorMod(worldX, Chunk.SIZE_X), y,
+                Math.floorMod(worldZ, Chunk.SIZE_Z));
     }
 
     /**
@@ -81,19 +202,6 @@ public class ChunkLightingSystem {
         addNeighborEdgeBlocks(chunk, lightQueue, true);
 
         propagateLight(lightQueue, true);
-    }
-
-    /**
-     * Propagate block light from a source
-     */
-    private void propagateBlockLight(Chunk chunk, int startX, int startY, int startZ, int lightLevel) {
-        Queue<LightNode> lightQueue = new ArrayDeque<>();
-        lightQueue.offer(new LightNode(startX, startY, startZ, lightLevel, chunk));
-        
-        // Add edge blocks from neighboring chunks
-        addNeighborEdgeBlocks(chunk, lightQueue, false);
-        
-        propagateLight(lightQueue, false);
     }
 
     /**
@@ -173,6 +281,10 @@ public class ChunkLightingSystem {
     }
 
     private void propagateLight(Queue<LightNode> lightQueue, boolean isSunlight) {
+        propagateLight(lightQueue, isSunlight, null);
+    }
+
+    private void propagateLight(Queue<LightNode> lightQueue, boolean isSunlight, Set<Chunk> dirtyChunks) {
         // Six directions: -X, +X, -Y, +Y, -Z, +Z
         int[] dx = { -1, 1, 0, 0, 0, 0 };
         int[] dy = { 0, 0, -1, 1, 0, 0 };
@@ -249,10 +361,9 @@ public class ChunkLightingSystem {
                         targetChunk.setBlocklight(localX, localY, localZ, (byte) newLight);
                     }
 
-                    // Mark neighbor chunk as dirty if light crossed chunk boundary
-                    if (targetChunk != node.chunk) {
-                        targetChunk.setLightingDirty(true);
-                    }
+                    targetChunk.setLightingDirty(true);
+                    if (dirtyChunks != null)
+                        dirtyChunks.add(targetChunk);
 
                     // Add to queue to continue propagation
                     lightQueue.offer(new LightNode(localX, localY, localZ, newLight, targetChunk));
@@ -356,30 +467,14 @@ public class ChunkLightingSystem {
     }
 
     /**
-     * Update lighting when a block changes
-     */
-    public void updateLightingAt(Chunk chunk, int x, int y, int z) {
-        // Mark chunk as dirty
-        chunk.setLightingDirty(true);
-
-        // For now, recalculate entire chunk lighting
-        // TODO: Implement incremental lighting updates
-        calculateSunlight(chunk);
-        calculateBlockLight(chunk);
-
-        chunk.markLightingClean();
-    }
-
-    /**
      * Update all lighting for a chunk
      */
     public void updateChunkLighting(Chunk chunk) {
-        if (!chunk.isLightingDirty())
-            return;
-
-        calculateSunlight(chunk);
-        calculateBlockLight(chunk);
-        chunk.markLightingClean();
+        if (chunk.isLightingDirty())
+            calculateSunlight(chunk);
+        calculateBlockLight();
+        if (chunk.isLightingDirty())
+            chunk.markLightingClean();
     }
 
     /**
@@ -415,6 +510,38 @@ public class ChunkLightingSystem {
             this.z = z;
             this.lightLevel = lightLevel;
             this.chunk = chunk;
+        }
+    }
+
+    private static class BlockPosition {
+        final Chunk chunk;
+        final int x;
+        final int y;
+        final int z;
+        private final int hashCode;
+
+        BlockPosition(Chunk chunk, int x, int y, int z) {
+            this.chunk = chunk;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.hashCode = 31 * System.identityHashCode(chunk)
+                    + (x * Chunk.SIZE_Y + y) * Chunk.SIZE_Z + z;
+        }
+
+        @Override
+        public int hashCode() {
+            return hashCode;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other)
+                return true;
+            if (!(other instanceof BlockPosition))
+                return false;
+            BlockPosition position = (BlockPosition) other;
+            return chunk == position.chunk && x == position.x && y == position.y && z == position.z;
         }
     }
 }

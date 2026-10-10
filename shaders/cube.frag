@@ -20,12 +20,16 @@ struct PointLight {
 in vec3 fragPos;
 in vec2 fragTex;
 in vec3 fragNormal;
-in float fragLighting; // Voxel lighting from vertex shader
+smooth in float fragLighting;
+in float fragEmissive;
 
 uniform sampler2D texture_sampler;
 
 uniform DirectionalLight dirLight;
-
+uniform vec3 cameraPosition;
+uniform vec3 fogColor;
+uniform float fogNear;
+uniform float fogFar;
 out vec4 fragColor;
 
 // Function to calculate directional light contribution
@@ -46,28 +50,33 @@ void main() {
     // 1. Sample the full RGBA color to get the alpha (transparency) channel
     vec4 texColorFull = texture(texture_sampler, fragTex);
     
-    // 2. Discard the fragment if it's transparent (alpha threshold)
     if (texColorFull.a < 0.1) {
         discard;
     }
     
-    // Extract the RGB for the rest of your lighting calculations
     vec3 texColor = texColorFull.rgb;
     vec3 norm = normalize(fragNormal);
     
-    // Calculate directional light (sun) - reduced influence for voxel games
-    vec3 result = CalcDirLight(dirLight, norm, texColor) * 0.3; // Reduce sun influence
-    
+    float voxelLight = clamp(fragLighting, 0.0, 1.0);
+    float diffuse = max(dot(norm, normalize(-dirLight.direction)), 0.0);
+    vec3 directionalLight = dirLight.ambient + dirLight.diffuse * diffuse;
+    float smoothVoxelLight = mix(voxelLight, smoothstep(0.0, 1.0, voxelLight), 0.35);
+    vec3 illumination = mix(vec3(0.08), vec3(1.0), smoothVoxelLight);
+    illumination *= 0.7 + 0.3 * directionalLight;
 
-    // Apply voxel-based lighting (this is the main lighting for minecraft-style games)
-    vec3 voxelLit = texColor * fragLighting;
-    
-    // Combine directional/point lights with voxel lighting
-    // Voxel lighting is primary, directional/point lights add subtle enhancement
-    result = mix(result, voxelLit, 0.8); // 80% voxel lighting, 20% traditional lighting
-    
-    // Ensure minimum brightness
-    result = max(result, texColor * 0.1);
-    
-    fragColor = vec4(result, 1.0);
+    vec3 litColor = texColor * illumination;
+    float emissive = clamp(fragEmissive, 0.0, 1.0);
+    vec3 warmEmission = vec3(1.0, 0.52, 0.16) * emissive;
+    litColor += warmEmission * 1.25;
+
+    float viewDistance = distance(fragPos, cameraPosition);
+    float fogAmount = smoothstep(fogNear, fogFar, viewDistance);
+    vec3 viewDirection = viewDistance > 0.001
+            ? (fragPos - cameraPosition) / viewDistance
+            : vec3(0.0, 0.0, 0.0);
+    float sunAlignment = max(dot(viewDirection, normalize(-dirLight.direction)), 0.0);
+    float scattering = pow(sunAlignment, 20.0) * fogAmount * 0.10;
+    vec3 foggedColor = mix(litColor, fogColor, fogAmount);
+    foggedColor += dirLight.diffuse * scattering;
+    fragColor = vec4(foggedColor, 1.0);
 }

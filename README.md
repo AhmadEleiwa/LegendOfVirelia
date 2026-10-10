@@ -28,6 +28,8 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
     - Block light sources (e.g., torches with configurable light levels 0-15)
     - Cross-chunk light propagation
     - Smooth per-vertex lighting with ambient occlusion
+    - Distance fog with directional sun scattering and emissive torch glow
+    - Camera FOV response to block interaction impacts
   - Texture atlas system with automatic UV mapping
   - Frustum culling for efficient rendering
 
@@ -42,7 +44,7 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
 - **Networking & Synchronization**
   - Threaded client-server architecture
   - Command-based communication protocol with type safety
-  - Client-side prediction for responsive gameplay
+  - Batched server-authoritative block updates
   - Server-authoritative world state
   - Queue-based command processing (ConcurrentLinkedQueue)
   - Supported commands:
@@ -50,7 +52,8 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
     - `PlaceBlockCommand` - Add blocks to world
     - `ClientReadyCommand` - Client initialization handshake
     - `GenerateWorldCommand` - Procedural world generation trigger
-    - `PlaceBlockConfirmCommand` - Server confirmation for actions
+    - `BlockChangesCommand` - Applies a batch of server-side edits
+    - `BlockChangesConfirmCommand` - Applies the server-confirmed batch on the client
 
 - **Lighting System**
   - Dual lighting channels (sunlight + block light)
@@ -77,8 +80,7 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
 
 ### 🚧 In Development
 
-- **Physics System** - Collision detection, gravity, AABB collision resolution
-- **Procedural World Generation** - Noise-based terrain, biomes, caves
+- **Procedural World Generation** - Rolling hills, mountains, dry river and lake basins, layered underground, connected caves, and distance-prioritized background chunk streaming
 - **Extended UI Components** - Buttons, text inputs, inventory grids, pause menus
 - **Advanced Lighting** - Colored lights, dynamic shadows, global illumination
 - **Entity System** - Mobs, NPCs, physics-based entities
@@ -182,11 +184,21 @@ cd LegendOfVirelia
 
 ### Controls
 
-- **Mouse Left** - Break block (default mode) / Place block (build mode)
-- **Mouse Right** - Place block (default mode) / Break block (build mode)
-- **B** - Toggle build mode (swap left/right click behavior)
+- **W / A / S / D** - Walk
+- **Hold Space** - Jump when grounded; holding it jumps again on landing
+- **Left Control** - Sprint
+- **Left Shift** - Crouch and move slower
+- **R** - Reset the player position
+- **Mouse Left** - Break block (default) / Place block (alternate mode)
+- **Mouse Right** - Place block (default) / Break block (alternate mode)
+- **B** - Toggle alternate click behavior
+- **1 / 2 / 3** - Select dirt, dirt2, or torch for placement
 - **Y** - Toggle debug mode
 - **ESC** - Exit game
+
+The gameplay HUD displays FPS, player coordinates, JVM heap usage, a center crosshair,
+and the currently selected hotbar block. GPU utilization is not shown because the
+current renderer does not expose portable GPU telemetry.
 
 ### Configuration
 
@@ -194,7 +206,7 @@ The engine uses several configuration constants:
 
 ```java
 // Chunk configuration (Chunk.java)
-SIZE_X = 16, SIZE_Y = 16, SIZE_Z = 16
+SIZE_X = 16, SIZE_Y = 96, SIZE_Z = 16
 MAX_LIGHT_LEVEL = 15
 
 // World configuration (World.java)
@@ -229,8 +241,10 @@ LegendOfVirelia/
 │   │   │           └── commands/
 │   │   │               ├── BreakBlockCommand.java
 │   │   │               ├── PlaceBlockCommand.java
+│   │   │               ├── BlockChangesCommand.java
+│   │   │               ├── BlockChangesConfirmCommand.java
 │   │   │               ├── ClientReady.java
-│   │   │               └── PlaceBlockConfirmCommand.java
+│   │   │               └── BlockChange.java
 │   │   │
 │   │   ├── engine/
 │   │   │   ├── io/
@@ -439,22 +453,22 @@ while ((command = incomingCommands.poll()) != null) {
 }
 ```
 
-**Server confirms to client:**
+**Server confirms a block-edit batch to the client:**
 ```java
-ClientCommand confirmation = new PlaceBlockConfirmCommand(position, blockId);
+ClientCommand confirmation = new BlockChangesConfirmCommand(changes);
 serverWorld.sendCommand(confirmation);
 ```
 
-### Client-Side Prediction
+### Client-Side Reconciliation
 
-The client immediately applies actions for responsive gameplay:
+The client submits edits to the server. The server applies valid changes and returns
+one confirmation batch; the client applies the confirmed changes and queues affected
+chunk meshes for incremental rebuilding.
 
 ```java
 public void placeBlock() {
     PlaceBlockCommand action = new PlaceBlockCommand(position, blockId);
-    worldState.sendCommand(action);  // Send to server
-    // Block is placed immediately on client for instant feedback
-    // Server confirmation will reconcile any conflicts
+    worldState.sendCommand(action);
 }
 ```
 
@@ -528,15 +542,13 @@ float[] uvRect = atlas.getUV("dirt"); // Returns [uMin, vMin, uMax, vMax]
 
 ### Day/Night Cycle
 
-The lighting system supports dynamic day/night cycles:
+Directional sun lighting can be updated from the game loop:
 
 ```java
-// Update sun direction and intensity
-sun.updateForTimeOfDay(time); // time: 0.0 (midnight) to 1.0 (noon)
-
-// Regenerate meshes with new lighting
-WorldRenderer.updateDayNightCycle(world, dayNightCycle);
+sun.updateForTimeOfDay(time); // time: 0.0 (midnight) to 1.0 (next midnight)
 ```
+
+Voxel light is calculated by `ChunkLightingSystem` and baked into chunk meshes.
 
 ### Performance Optimizations
 
@@ -628,10 +640,10 @@ void main() {
 - [x] Command-based networking
 
 ### Phase 2: Physics & Movement
-- [ ] Player collision detection (AABB)
-- [ ] Gravity and jumping
+- [x] Player collision detection (AABB)
+- [x] Gravity, block-clearing jumps, and gradual movement acceleration
 - [ ] Flying mode
-- [ ] Sprint and crouch mechanics
+- [x] Sprint and crouch mechanics
 - [ ] Smooth camera movement
 
 ### Phase 3: World Generation
@@ -645,7 +657,6 @@ void main() {
 - [ ] Inventory system
 - [ ] Crafting mechanics
 - [ ] Multiple block types (stairs, slabs, glass)
-- [ ] Water and fluid simulation
 - [ ] Particle effects
 
 ### Phase 5: Multiplayer
@@ -668,11 +679,10 @@ Contributions are welcome! Here's how you can help:
 
 ### Areas of Interest
 
-1. **Physics System** - Implement AABB collision and player movement
-2. **World Generation** - Create noise-based terrain generators
-3. **UI System** - Expand UI components (buttons, text input, inventory)
-4. **Networking** - Replace CommunicationBridge with real sockets
-5. **Performance** - Optimize mesh generation and rendering
+1. **World Generation** - Create noise-based terrain generators
+2. **UI System** - Expand UI components (buttons, text input, inventory)
+3. **Networking** - Replace CommunicationBridge with real sockets
+4. **Performance** - Optimize mesh generation and rendering
 
 ### Development Setup
 
