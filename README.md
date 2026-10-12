@@ -80,7 +80,7 @@ A Java-based voxel game engine built with OpenGL, featuring client-server archit
 
 ### 🚧 In Development
 
-- **Procedural World Generation** - Rolling hills, mountains, dry river and lake basins, layered underground, connected caves, and distance-prioritized background chunk streaming
+- **Procedural World Generation** - Rolling hills, mountains, water-filled river and lake basins, layered underground, connected caves, and distance-prioritized background chunk streaming
 - **Extended UI Components** - Buttons, text inputs, inventory grids, pause menus
 - **Advanced Lighting** - Colored lights, dynamic shadows, global illumination
 - **Entity System** - Mobs, NPCs, physics-based entities
@@ -192,13 +192,20 @@ cd LegendOfVirelia
 - **Mouse Left** - Break block (default) / Place block (alternate mode)
 - **Mouse Right** - Place block (default) / Break block (alternate mode)
 - **B** - Toggle alternate click behavior
-- **1 / 2 / 3** - Select dirt, dirt2, or torch for placement
+- **1 / 2 / 3 / 4** - Select dirt, dirt2, torch, or water for placement
 - **Y** - Toggle debug mode
 - **ESC** - Exit game
 
 The gameplay HUD displays FPS, player coordinates, JVM heap usage, a center crosshair,
 and the currently selected hotbar block. GPU utilization is not shown because the
 current renderer does not expose portable GPU telemetry.
+
+Water is a transparent fluid block with animated wave displacement, scrolling
+surface and normal-map textures, and a separate blended render pass. Water blocks
+are generated in river and lake basins and can be placed from hotbar slot 4.
+Placed source blocks spread horizontally to empty neighboring cells on timed
+ticks, decreasing one level per step from 7 to 1. Lower fluid levels render at
+reduced heights; generated lake and river water remains inactive.
 
 ### Configuration
 

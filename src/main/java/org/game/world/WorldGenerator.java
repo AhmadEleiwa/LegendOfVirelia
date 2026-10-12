@@ -4,6 +4,7 @@ public class WorldGenerator {
     private static final int BEDROCK_LEVEL = 0;
     private static final int RIVER_BED_LEVEL = 18;
     private static final int LAKE_BED_LEVEL = 17;
+    private static final int WATER_LEVEL = 24;
     private static final int SURFACE_BUFFER = 6;
 
     private final FastNoiseLite terrainNoise;
@@ -68,25 +69,43 @@ public class WorldGenerator {
                 int worldZ = chunkWorldZ + z;
                 BiomeConfig biome = getBiomeAt(worldX, worldZ);
                 int surfaceY = getSurfaceHeight(worldX, worldZ);
+                int waterSurfaceY = getWaterSurfaceY(worldX, worldZ, surfaceY);
 
-                for (int y = BEDROCK_LEVEL; y <= surfaceY; y++) {
-                    if (y > BEDROCK_LEVEL + 1 && isCave(worldX, y, worldZ, surfaceY))
-                        continue;
+                for (int y = BEDROCK_LEVEL; y <= Math.max(surfaceY, waterSurfaceY); y++) {
+                    if (y <= surfaceY) {
+                        if (y > BEDROCK_LEVEL + 1 && isCave(worldX, y, worldZ, surfaceY))
+                            continue;
 
-                    int blockId;
-                    if (y == BEDROCK_LEVEL) {
-                        blockId = BlockRegistry.getId("dirt2");
-                    } else if (y == surfaceY) {
-                        blockId = biome.surfaceBlock;
-                    } else if (y >= surfaceY - SURFACE_BUFFER) {
-                        blockId = biome.fillerBlock;
+                        int blockId;
+                        if (y == BEDROCK_LEVEL) {
+                            blockId = BlockRegistry.getId("dirt2");
+                        } else if (y == surfaceY) {
+                            blockId = biome.surfaceBlock;
+                        } else if (y >= surfaceY - SURFACE_BUFFER) {
+                            blockId = biome.fillerBlock;
+                        } else {
+                            blockId = BlockRegistry.getId("dirt2");
+                        }
+                        chunk.setBlock(x, y, z, blockId);
                     } else {
-                        blockId = BlockRegistry.getId("dirt2");
+                        chunk.setBlock(x, y, z, BlockRegistry.getId("water"));
+                        chunk.setFluidState(x, y, z, FluidBlock.MAX_LEVEL, false, 0.0f);
                     }
-                    chunk.setBlock(x, y, z, blockId);
                 }
             }
         }
+    }
+
+    private int getWaterSurfaceY(int worldX, int worldZ, int terrainSurfaceY) {
+        float riverDistance = getRiverDistance(worldX, worldZ);
+        float lakeValue = lakeNoise.GetNoise(worldX * 0.008f, worldZ * 0.008f);
+        boolean inRiverChannel = riverDistance < 0.052f;
+        boolean inLakeCenter = lakeValue > 0.70f
+                && biomeNoise.GetNoise(worldX * 0.004f, worldZ * 0.004f) < 0.3f;
+
+        return (inRiverChannel || inLakeCenter) && terrainSurfaceY < WATER_LEVEL
+                ? WATER_LEVEL
+                : terrainSurfaceY;
     }
 
     private int getSurfaceHeight(int worldX, int worldZ) {

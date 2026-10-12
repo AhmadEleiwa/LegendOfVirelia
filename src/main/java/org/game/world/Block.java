@@ -43,8 +43,14 @@ public class Block extends GameObject {
      * @param modelName The name of the model file (without extension).
      */
     public Block(String modelName) {
+        this(modelName, true);
+    }
+
+    public Block(String modelName, boolean loadModel) {
         this.type = modelName;
         this.name = modelName;
+        if (!loadModel)
+            return;
         // Load the JSON data
         Model model= ModelLoader.loadModel("assets/models/" + modelName + ".json");
         

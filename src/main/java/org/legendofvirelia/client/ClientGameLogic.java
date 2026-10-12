@@ -14,6 +14,7 @@ import org.engine.loop.ClientSide;
 import org.engine.rendering.Renderer;
 import org.engine.rendering.ShaderProgram;
 import org.engine.rendering.UIRenderer;
+import org.engine.rendering.WaterRenderer;
 import org.engine.utils.Debug;
 import org.engine.utils.Logger;
 import org.engine.utils.Resource;
@@ -30,7 +31,9 @@ import org.game.world.Block;
 import org.game.world.BlockPlacer;
 import org.game.world.BlockRegistry;
 import org.game.world.Blocks;
+import org.game.world.WorldRenderer;
 import org.joml.Vector2f;
+import org.joml.Vector3i;
 import org.legendofvirelia.shared.ClientWorldState;
 import org.legendofvirelia.shared.commands.BreakBlockCommand;
 import org.legendofvirelia.shared.commands.GenerateNewChunks;
@@ -41,6 +44,7 @@ public class ClientGameLogic implements ClientSide {
     private final ClientWorldState worldState;
     private Renderer renderer;
     private UIRenderer uiRenderer;
+    private WaterRenderer waterRenderer;
     private Camera camera;
     private PlayerPhysics playerPhysics;
     public float timer = 0;
@@ -57,12 +61,13 @@ public class ClientGameLogic implements ClientSide {
     private ColorRect[] hotbarSlots;
     private ColorRect[] hotbarSwatches;
     private ColorRect[] selectedSlotBorder;
-    private final int[] hotbarBlockIds = new int[3];
-    private final String[] hotbarBlockNames = {"DIRT", "DIRT2", "TORCH"};
+    private final int[] hotbarBlockIds = new int[4];
+    private final String[] hotbarBlockNames = {"DIRT", "DIRT2", "TORCH", "WATER"};
     private final float[][] hotbarColors = {
             {0.45f, 0.29f, 0.16f},
             {0.42f, 0.43f, 0.46f},
-            {0.95f, 0.58f, 0.12f}
+            {0.95f, 0.58f, 0.12f},
+            {0.10f, 0.58f, 0.78f}
     };
     private int selectedHotbarIndex;
     private int hudWidth;
@@ -119,13 +124,19 @@ public class ClientGameLogic implements ClientSide {
         BlockRegistry.register("dirt", Blocks.DIRT.get());
         BlockRegistry.register("torch", Blocks.Torch.get());
         BlockRegistry.register("dirt2", Blocks.DIRT2.get());
+        Block water = Blocks.WATER.get();
+        water.setTransparent(true);
+        BlockRegistry.register("water", water);
         hotbarBlockIds[0] = BlockRegistry.getId("dirt");
         hotbarBlockIds[1] = BlockRegistry.getId("dirt2");
         hotbarBlockIds[2] = BlockRegistry.getId("torch");
+        hotbarBlockIds[3] = BlockRegistry.getId("water");
         selectedBlockId = hotbarBlockIds[selectedHotbarIndex];
         createHud();
 
         sun = DirectionalLight.createSunlight();
+        waterRenderer = new WaterRenderer();
+        WorldRenderer.setWaterRenderer(waterRenderer);
         worldState.init();
 
     }
@@ -205,7 +216,7 @@ public class ClientGameLogic implements ClientSide {
     private void updateHotbarLabel() {
         if (hotbarLabel != null) {
             hotbarLabel.setText("SELECTED: " + hotbarBlockNames[selectedHotbarIndex]
-                    + "     1 DIRT  2 DIRT2  3 TORCH");
+                    + "     1 DIRT  2 DIRT2  3 TORCH  4 WATER");
         }
     }
 
@@ -316,13 +327,19 @@ public class ClientGameLogic implements ClientSide {
         BlockPlacer.RaycastResult result = BlockPlacer.raycastForPlacement(
                 worldState.getCurrentWorld(), camera, 5f);
 
-        if (result.hit && result.placePosition != null) {
-            if (playerPhysics.overlapsPlayer(camera, result.placePosition)) {
+        if (result.hit && result.blockPosition != null) {
+            boolean replacingWater = worldState.getCurrentWorld().getBlockIdAt(
+                    result.blockPosition.x, result.blockPosition.y, result.blockPosition.z)
+                    == BlockRegistry.getId("water");
+            Vector3i targetPosition = replacingWater ? result.blockPosition : result.placePosition;
+            if (targetPosition == null)
+                return;
+            if (!replacingWater && playerPhysics.overlapsPlayer(camera, targetPosition)) {
                 Debug.log("Cannot place a block inside the player.");
                 return;
             }
             // Use the new client-side prediction system
-            PlaceBlockCommand action = new PlaceBlockCommand(result.placePosition, selectedBlockId);
+            PlaceBlockCommand action = new PlaceBlockCommand(targetPosition, selectedBlockId);
             worldState.sendCommand(action);
             camera.triggerImpact(0.65f);
         } else {
@@ -398,5 +415,7 @@ public class ClientGameLogic implements ClientSide {
     public void cleanup() {
         for (UIElement element : hudElements)
             element.destroy();
+        if (waterRenderer != null)
+            waterRenderer.delete();
     }
 }

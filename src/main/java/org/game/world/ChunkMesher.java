@@ -67,6 +67,88 @@ public class ChunkMesher {
         return new Model(mesh);
     }
 
+    public static Model buildWaterModel(World world, Chunk chunk) {
+        List<Float> positions = new ArrayList<>();
+        List<Float> texCoords = new ArrayList<>();
+        List<Float> waveWeights = new ArrayList<>();
+        List<Integer> indices = new ArrayList<>();
+        int waterId = BlockRegistry.getId("water");
+        if (waterId == 0)
+            return null;
+
+        for (int x = 0; x < Chunk.SIZE_X; x++) {
+            for (int y = 0; y < Chunk.SIZE_Y; y++) {
+                for (int z = 0; z < Chunk.SIZE_Z; z++) {
+                    if (chunk.getBlock(x, y, z) != waterId)
+                        continue;
+                    int worldX = chunk.getChunkX() * Chunk.SIZE_X + x;
+                    int worldZ = chunk.getChunkZ() * Chunk.SIZE_Z + z;
+                    float height = fluidHeight(chunk.getFluidLevel(x, y, z));
+                    for (Quad.FaceType face : Quad.FaceType.values()) {
+                        int[] offset = getFaceOffset(face);
+                        int neighborX = worldX + offset[0];
+                        int neighborY = y + offset[1];
+                        int neighborZ = worldZ + offset[2];
+                        int neighborId = world.getBlockIdAt(neighborX, neighborY, neighborZ);
+                        float sideBottom = 0.0f;
+                        if (neighborId == waterId) {
+                            if (offset[1] != 0)
+                                continue;
+                            sideBottom = fluidHeight(world.getFluidLevelAt(
+                                    neighborX, neighborY, neighborZ));
+                            if (sideBottom >= height)
+                                continue;
+                        } else {
+                            Block neighbor = world.getBlockAt(neighborX, neighborY, neighborZ);
+                            if (neighbor != null && !neighbor.isTransparent())
+                                continue;
+                        }
+                        addWaterFace(positions, texCoords, waveWeights, indices,
+                                x, y, z, Quad.getQuad(face), height, sideBottom);
+                    }
+                }
+            }
+        }
+
+        if (indices.isEmpty())
+            return null;
+        float[] positionArray = listToFloatArray(positions);
+        float[] texCoordArray = listToFloatArray(texCoords);
+        float[] waveWeightArray = listToFloatArray(waveWeights);
+        float[] emissive = new float[waveWeightArray.length];
+        int[] indexArray = listToIntArray(indices);
+        LightedMesh waterMesh = new LightedMesh(positionArray, texCoordArray,
+                waveWeightArray, emissive, indexArray);
+        waterMesh.enableTranslucentFaceSorting(positionArray, indexArray);
+        return new Model(waterMesh);
+    }
+
+    private static void addWaterFace(List<Float> positions, List<Float> texCoords,
+            List<Float> waveWeights, List<Integer> indices, int x, int y, int z, Quad quad,
+            float height, float bottomHeight) {
+        int baseIndex = positions.size() / 3;
+        for (int i = 0; i < quad.positions.length; i += 3) {
+            float vertexX = quad.positions[i] + x;
+            float vertexY = quad.positions[i + 1] == 0.0f
+                    ? y + bottomHeight
+                    : y + height;
+            float vertexZ = quad.positions[i + 2] + z;
+            positions.add(vertexX);
+            positions.add(vertexY);
+            positions.add(vertexZ);
+            texCoords.add(quad.texCoords[i / 3 * 2]);
+            texCoords.add(quad.texCoords[i / 3 * 2 + 1]);
+            waveWeights.add(vertexY - y);
+        }
+
+        for (int index : quad.indices)
+            indices.add(baseIndex + index);
+    }
+
+    private static float fluidHeight(int level) {
+        return (level > 0 ? level : FluidBlock.MAX_LEVEL) / (float) FluidBlock.MAX_LEVEL;
+    }
+
     /**
      * Decides whether the face of a solid block toward (dx,dy,dz) should be drawn.
      *

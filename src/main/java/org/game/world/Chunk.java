@@ -8,7 +8,11 @@ public class Chunk implements Cloneable {
     private static final int MAX_LIGHT_LEVEL = 15;
 
     private int[][][] blocks = new int[SIZE_X][SIZE_Y][SIZE_Z];
+    private byte[][][] fluidLevels = new byte[SIZE_X][SIZE_Y][SIZE_Z];
+    private boolean[][][] fluidSources = new boolean[SIZE_X][SIZE_Y][SIZE_Z];
+    private float[][][] fluidFlowTimers = new float[SIZE_X][SIZE_Y][SIZE_Z];
     private Model model;
+    private Model waterModel;
 
     // Lighting data
     private byte[][][] sunlight = new byte[SIZE_X][SIZE_Y][SIZE_Z];
@@ -49,6 +53,10 @@ public class Chunk implements Cloneable {
             this.model.delete(); // Free OpenGL buffers
             this.model = null;
         }
+        if (!built && this.waterModel != null) {
+            this.waterModel.delete();
+            this.waterModel = null;
+        }
     }
 
     /** Force a mesh rebuild on next generateVisibleMeshes pass. */
@@ -66,6 +74,9 @@ public class Chunk implements Cloneable {
         for (int x = 0; x < SIZE_X; x++)
             for (int y = 0; y < SIZE_Y; y++) {
                 System.arraycopy(this.blocks[x][y],     0, c.blocks[x][y],     0, SIZE_Z);
+                System.arraycopy(this.fluidLevels[x][y], 0, c.fluidLevels[x][y], 0, SIZE_Z);
+                System.arraycopy(this.fluidSources[x][y], 0, c.fluidSources[x][y], 0, SIZE_Z);
+                System.arraycopy(this.fluidFlowTimers[x][y], 0, c.fluidFlowTimers[x][y], 0, SIZE_Z);
                 System.arraycopy(this.sunlight[x][y],   0, c.sunlight[x][y],   0, SIZE_Z);
                 System.arraycopy(this.blocklight[x][y], 0, c.blocklight[x][y], 0, SIZE_Z);
             }
@@ -90,6 +101,8 @@ public class Chunk implements Cloneable {
 
     public Model getModel()              { return model; }
     public void  setModel(Model model)   { this.model = model; }
+    public Model getWaterModel()         { return waterModel; }
+    public void setWaterModel(Model waterModel) { this.waterModel = waterModel; }
     // --- Blocks ---
 
     public int getBlock(int x, int y, int z) {
@@ -103,9 +116,39 @@ public class Chunk implements Cloneable {
 
     public void setBlock(int x, int y, int z, int id) {
         if (inBounds(x, y, z)) {
+            if (blocks[x][y][z] != id) {
+                fluidLevels[x][y][z] = 0;
+                fluidSources[x][y][z] = false;
+                fluidFlowTimers[x][y][z] = 0.0f;
+            }
             blocks[x][y][z] = id;
             lightingDirty = true;
         }
+    }
+
+    public int getFluidLevel(int x, int y, int z) {
+        return inBounds(x, y, z) ? Byte.toUnsignedInt(fluidLevels[x][y][z]) : 0;
+    }
+
+    public boolean isFluidSource(int x, int y, int z) {
+        return inBounds(x, y, z) && fluidSources[x][y][z];
+    }
+
+    public float getFluidFlowTimer(int x, int y, int z) {
+        return inBounds(x, y, z) ? fluidFlowTimers[x][y][z] : 0.0f;
+    }
+
+    public void setFluidState(int x, int y, int z, int level, boolean source, float flowTimer) {
+        if (!inBounds(x, y, z))
+            return;
+        fluidLevels[x][y][z] = (byte) Math.max(0, Math.min(7, level));
+        fluidSources[x][y][z] = source;
+        fluidFlowTimers[x][y][z] = Math.max(0.0f, flowTimer);
+    }
+
+    public void setFluidFlowTimer(int x, int y, int z, float flowTimer) {
+        if (inBounds(x, y, z))
+            fluidFlowTimers[x][y][z] = Math.max(0.0f, flowTimer);
     }
 
     // --- Lighting getters/setters ---

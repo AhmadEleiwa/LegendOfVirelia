@@ -2,17 +2,29 @@ package org.game.world;
 
 import org.engine.utils.Debug;
 import org.engine.rendering.Renderer;
+import org.engine.rendering.WaterRenderer;
 import org.game.entities.Camera;
 import org.game.lighting.DirectionalLight;
 import org.game.meshes.Model;
+import org.joml.Matrix4f;
 import org.joml.Vector3i;
 import org.joml.Vector3f;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.Comparator;
+import static org.lwjgl.opengl.GL11.GL_BLEND;
+import static org.lwjgl.opengl.GL11.GL_ONE_MINUS_SRC_ALPHA;
+import static org.lwjgl.opengl.GL11.GL_SRC_ALPHA;
+import static org.lwjgl.opengl.GL11.glBlendFunc;
+import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glEnable;
+import static org.lwjgl.opengl.GL11.glDepthMask;
 
 public class WorldRenderer {
     private static ChunkLightingSystem lightingSystem;
+    private static WaterRenderer waterRenderer;
     private static float currentDayNightCycle = 1.0f;
     private static final Set<Chunk> borderRefreshQueue = new LinkedHashSet<>();
 
@@ -20,6 +32,10 @@ public class WorldRenderer {
         borderRefreshQueue.clear();
         lightingSystem = new ChunkLightingSystem(world);
         ChunkMesher.setLightingSystem(lightingSystem);
+    }
+
+    public static void setWaterRenderer(WaterRenderer renderer) {
+        waterRenderer = renderer;
     }
 
     /** Builds or refreshes at most one visible chunk mesh per frame. */
@@ -50,7 +66,9 @@ public class WorldRenderer {
             } else {
                 lightingSystem.updateChunkLighting(candidate);
                 Model chunkModel = ChunkMesher.buildModel(world, candidate, currentDayNightCycle);
+                Model waterModel = ChunkMesher.buildWaterModel(world, candidate);
                 candidate.setModel(chunkModel);
+                candidate.setWaterModel(waterModel);
                 candidate.setMeshBuilt(true);
                 refreshNeighborBorders(world, candidate.getChunkX(), candidate.getChunkZ());
             }
@@ -83,10 +101,12 @@ public class WorldRenderer {
         long startedAt = System.nanoTime();
         lightingSystem.updateChunkLighting(chunk);
         Model newModel = ChunkMesher.buildModel(world, chunk, currentDayNightCycle);
+        Model newWaterModel = ChunkMesher.buildWaterModel(world, chunk);
 
         // setMeshBuilt(false) frees the old GPU buffers before we replace the model
         chunk.setMeshBuilt(false);
         chunk.setModel(newModel);
+        chunk.setWaterModel(newWaterModel);
         chunk.setMeshBuilt(true);
         Debug.log("Rebuilt chunk mesh (" + chunk.getChunkX() + ", " + chunk.getChunkZ()
                 + ") in " + ((System.nanoTime() - startedAt) / 1_000_000.0) + " ms.");
@@ -134,5 +154,27 @@ public class WorldRenderer {
             renderer.render(model, camera, light, chunk.getPosition(), chunkCenter, radius);
         }
 
+        if (waterRenderer == null)
+            return;
+
+        List<Chunk> waterChunks = new ArrayList<>();
+        for (Chunk chunk : visibleChunks) {
+            if (chunk.isMeshBuilt() && chunk.getWaterModel() != null)
+                waterChunks.add(chunk);
+        }
+        waterChunks.sort(Comparator.comparingDouble((Chunk chunk) ->
+                chunk.getPosition().distanceSquared(camera.getViewPosition())).reversed());
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(false);
+        Matrix4f projection = camera.getProjection();
+        Matrix4f view = camera.getView();
+        float animationTime = (float) (System.nanoTime() / 1_000_000_000.0);
+        for (Chunk chunk : waterChunks)
+            waterRenderer.render(chunk.getWaterModel(), camera, light, chunk.getPosition(),
+                    projection, view, animationTime);
+        glDepthMask(true);
+        glDisable(GL_BLEND);
     }
 }

@@ -46,14 +46,21 @@ public class ClientWorldState extends WorldState<ClientCommand, ServerCommand> {
             Chunk targetChunk = world.getChunk(
                     Math.floorDiv(position.x, Chunk.SIZE_X),
                     Math.floorDiv(position.z, Chunk.SIZE_Z));
-            if (targetChunk == null
-                    || targetChunk.getBlock(Math.floorMod(position.x, Chunk.SIZE_X), position.y,
-                            Math.floorMod(position.z, Chunk.SIZE_Z)) == change.blockId)
+            if (targetChunk == null)
                 continue;
 
-            Chunk chunk = blockPlacer.placeBlock(position, change.blockId);
+            boolean sameBlock = targetChunk.getBlock(Math.floorMod(position.x, Chunk.SIZE_X), position.y,
+                    Math.floorMod(position.z, Chunk.SIZE_Z)) == change.blockId;
+            if (sameBlock && change.blockId != org.game.world.BlockRegistry.getId("water"))
+                continue;
+
+            Chunk chunk = sameBlock ? targetChunk : blockPlacer.placeBlock(position, change.blockId);
             if (chunk == null)
                 continue;
+            if (change.blockId == org.game.world.BlockRegistry.getId("water"))
+                world.setFluidStateAt(position.x, position.y, position.z,
+                        change.fluidLevel > 0 ? change.fluidLevel : org.game.world.FluidBlock.MAX_LEVEL,
+                        change.fluidSource, org.game.world.FluidBlock.TIME_TO_NEXT_FLOW);
 
             changedPositions.add(position);
             requestRerenderChunk(chunk);

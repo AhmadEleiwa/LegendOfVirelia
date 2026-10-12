@@ -1,6 +1,8 @@
 package org.game.entities;
 
 import org.engine.io.Input;
+import org.game.world.Block;
+import org.game.world.BlockRegistry;
 import org.game.world.Chunk;
 import org.game.world.World;
 import org.joml.Vector3f;
@@ -12,13 +14,13 @@ public final class PlayerPhysics {
     private static final float EYE_HEIGHT = 1.62f;
     private static final float CROUCH_HEIGHT = 1.2f;
     private static final float CROUCH_EYE_HEIGHT = 1.05f;
-    private static final float MOVE_SPEED = 4.2f;
+    private static final float MOVE_SPEED = 14.2f;
     private static final float SPRINT_MULTIPLIER = 1.5f;
     private static final float CROUCH_MULTIPLIER = 0.45f;
     private static final float MOVE_ACCELERATION = 22.0f;
     private static final float MOVE_DECELERATION = 28.0f;
     private static final float GRAVITY = 19.0f;
-    private static final float JUMP_SPEED = 7.2f;
+    private static final float JUMP_SPEED = 18.2f;
     private static final float TERMINAL_SPEED = 50.0f;
     private static final float COLLISION_EPSILON = 0.0001f;
 
@@ -242,8 +244,12 @@ public final class PlayerPhysics {
         int chunkX = Math.floorDiv(x, Chunk.SIZE_X);
         int chunkZ = Math.floorDiv(z, Chunk.SIZE_Z);
         Chunk chunk = world.getChunk(chunkX, chunkZ);
-        return chunk == null || chunk.getBlock(Math.floorMod(x, Chunk.SIZE_X), y,
-                Math.floorMod(z, Chunk.SIZE_Z)) != 0;
+        if (chunk == null)
+            return true;
+        int blockId = chunk.getBlock(Math.floorMod(x, Chunk.SIZE_X), y,
+                Math.floorMod(z, Chunk.SIZE_Z));
+        Block block = BlockRegistry.getBlock(blockId);
+        return blockId != 0 && (block == null || !block.isTransparent());
     }
 
     private static float getAxis(Vector3f vector, int axis) {

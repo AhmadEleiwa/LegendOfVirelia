@@ -28,35 +28,63 @@ public class BlockPlacer {
      * Raycast through the world to find block intersections
      */
     private static RaycastResult raycastWorld(World world, Vector3f start, Vector3f direction, float maxDistance) {
-        // DDA algorithm for voxel raycasting
-        Vector3f current = new Vector3f(start);
-        Vector3f step = new Vector3f(direction).normalize().mul(0.1f); // Step size
+        Vector3f ray = new Vector3f(direction);
+        if (ray.lengthSquared() == 0.0f || maxDistance < 0.0f)
+            return new RaycastResult(false, null, null, maxDistance);
+        ray.normalize();
 
-        Vector3i lastEmptyPos = new Vector3i();
+        int blockX = (int) Math.floor(start.x);
+        int blockY = (int) Math.floor(start.y);
+        int blockZ = (int) Math.floor(start.z);
+        int stepX = directionStep(ray.x);
+        int stepY = directionStep(ray.y);
+        int stepZ = directionStep(ray.z);
+        float deltaX = stepX == 0 ? Float.POSITIVE_INFINITY : Math.abs(1.0f / ray.x);
+        float deltaY = stepY == 0 ? Float.POSITIVE_INFINITY : Math.abs(1.0f / ray.y);
+        float deltaZ = stepZ == 0 ? Float.POSITIVE_INFINITY : Math.abs(1.0f / ray.z);
+        float nextX = initialBoundaryDistance(start.x, blockX, ray.x, stepX);
+        float nextY = initialBoundaryDistance(start.y, blockY, ray.y, stepY);
+        float nextZ = initialBoundaryDistance(start.z, blockZ, ray.z, stepZ);
+        Vector3i previousEmpty = null;
+        float distance = 0.0f;
 
-        for (float distance = 0; distance < maxDistance; distance += 0.1f) {
-            // Current voxel position
-            int blockX = (int) Math.floor(current.x);
-            int blockY = (int) Math.floor(current.y);
-            int blockZ = (int) Math.floor(current.z);
-
-            // Get the block at this position
-            int hitBlockId = world.getBlockIdAt(blockX, blockY, blockZ);
-           
-            if (hitBlockId != 0) {
-                // Hit a solid block
+        while (distance <= maxDistance) {
+            int blockId = world.getBlockIdAt(blockX, blockY, blockZ);
+            Block block = BlockRegistry.getBlock(blockId); // Ensure the block is registered
+            
+            if (blockId != 0 && !(block instanceof FluidBlock)) { // Ignore air and fluid blocks
                 return new RaycastResult(true, new Vector3i(blockX, blockY, blockZ),
-                        new Vector3i(lastEmptyPos), distance);
+                        previousEmpty, distance);
             }
 
-            // Remember this empty position for block placement
-            lastEmptyPos.set(blockX, blockY, blockZ);
-
-            // Step forward
-            current.add(step);
+            previousEmpty = new Vector3i(blockX, blockY, blockZ);
+            if (nextX <= nextY && nextX <= nextZ) {
+                distance = nextX;
+                nextX += deltaX;
+                blockX += stepX;
+            } else if (nextY <= nextZ) {
+                distance = nextY;
+                nextY += deltaY;
+                blockY += stepY;
+            } else {
+                distance = nextZ;
+                nextZ += deltaZ;
+                blockZ += stepZ;
+            }
         }
 
         return new RaycastResult(false, null, null, maxDistance);
+    }
+
+    private static float initialBoundaryDistance(float origin, int block, float direction, int step) {
+        if (step == 0)
+            return Float.POSITIVE_INFINITY;
+        float boundary = step > 0 ? block + 1.0f : block;
+        return (boundary - origin) / direction;
+    }
+
+    private static int directionStep(float direction) {
+        return direction > 0.0f ? 1 : direction < 0.0f ? -1 : 0;
     }
 
     /**

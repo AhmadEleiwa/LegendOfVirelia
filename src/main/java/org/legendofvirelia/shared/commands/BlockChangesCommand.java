@@ -33,17 +33,30 @@ public final class BlockChangesCommand implements ServerCommand {
 
             int localX = Math.floorMod(position.x, Chunk.SIZE_X);
             int localZ = Math.floorMod(position.z, Chunk.SIZE_Z);
-            if (targetChunk.getBlock(localX, position.y, localZ) == change.blockId) {
+            boolean sameBlock = targetChunk.getBlock(localX, position.y, localZ) == change.blockId;
+            if (sameBlock && change.blockId != org.game.world.BlockRegistry.getId("water")) {
                 skippedChanges++;
                 continue;
             }
 
-            Chunk chunk = world.getBlockPlacer().placeBlock(position, change.blockId);
-            if (chunk != null) {
-                appliedChanges.add(change);
-            } else {
+            Chunk chunk = sameBlock ? targetChunk
+                    : world.getBlockPlacer().placeBlock(position, change.blockId);
+            if (chunk == null) {
                 skippedChanges++;
+                continue;
             }
+            org.game.world.World gameWorld = world.getCurrentWorld();
+            if (change.blockId == org.game.world.BlockRegistry.getId("water")) {
+                int level = change.fluidLevel > 0 ? change.fluidLevel
+                        : org.game.world.FluidBlock.MAX_LEVEL;
+                boolean source = change.fluidLevel > 0 ? change.fluidSource : true;
+                gameWorld.placeFluidAt(position.x, position.y, position.z, level, source, 0);
+            }
+            appliedChanges.add(change.blockId == org.game.world.BlockRegistry.getId("water")
+                    ? new BlockChange(position.x, position.y, position.z, change.blockId,
+                            gameWorld.getFluidLevelAt(position.x, position.y, position.z),
+                            gameWorld.isFluidSourceAt(position.x, position.y, position.z))
+                    : change);
         }
 
         Debug.log("Server processed block-change batch: " + appliedChanges.size() + " applied, "

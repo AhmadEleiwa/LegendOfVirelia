@@ -1,9 +1,12 @@
 package org.legendofvirelia.shared;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.game.world.Chunk;
 import org.game.world.BlockPlacer;
 import org.legendofvirelia.shared.command.ClientCommand;
+import org.legendofvirelia.shared.commands.BlockChange;
+import org.legendofvirelia.shared.commands.BlockChangesConfirmCommand;
 import org.legendofvirelia.shared.command.ServerCommand;
 import org.legendofvirelia.shared.commands.LoadSingleChunkCommand;
 
@@ -26,6 +29,14 @@ public class ServerWorldState extends WorldState<ServerCommand, ClientCommand>{
         world.collectGeneratedChunks(4);
         sendAvailableChunks(2);
         world.update(delta);
+        List<org.game.world.World.FluidUpdate> fluidUpdates = world.updateFluidBlocks(delta, 512);
+        if (!fluidUpdates.isEmpty()) {
+            List<BlockChange> changes = new ArrayList<>(fluidUpdates.size());
+            for (org.game.world.World.FluidUpdate update : fluidUpdates)
+                changes.add(new BlockChange(update.x, update.y, update.z,
+                        update.blockId, update.level, update.source));
+            sendCommand(new BlockChangesConfirmCommand(changes));
+        }
     }
 
     private void sendAvailableChunks(int maximum) {
