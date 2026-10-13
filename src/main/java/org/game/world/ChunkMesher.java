@@ -83,7 +83,9 @@ public class ChunkMesher {
                         continue;
                     int worldX = chunk.getChunkX() * Chunk.SIZE_X + x;
                     int worldZ = chunk.getChunkZ() * Chunk.SIZE_Z + z;
-                    float height = fluidHeight(chunk.getFluidLevel(x, y, z));
+                    int fluidLevel = chunk.getFluidLevel(x, y, z);
+                    float height = fluidHeight(fluidLevel);
+                    float[] flowDirection = getFluidFlowDirection(world, worldX, y, worldZ, fluidLevel);
                     for (Quad.FaceType face : Quad.FaceType.values()) {
                         int[] offset = getFaceOffset(face);
                         int neighborX = worldX + offset[0];
@@ -104,7 +106,8 @@ public class ChunkMesher {
                                 continue;
                         }
                         addWaterFace(positions, texCoords, waveWeights, indices,
-                                x, y, z, Quad.getQuad(face), height, sideBottom);
+                                x, y, z, Quad.getQuad(face), height, sideBottom,
+                                flowDirection[0], flowDirection[1]);
                     }
                 }
             }
@@ -125,7 +128,7 @@ public class ChunkMesher {
 
     private static void addWaterFace(List<Float> positions, List<Float> texCoords,
             List<Float> waveWeights, List<Integer> indices, int x, int y, int z, Quad quad,
-            float height, float bottomHeight) {
+            float height, float bottomHeight, float flowX, float flowZ) {
         int baseIndex = positions.size() / 3;
         for (int i = 0; i < quad.positions.length; i += 3) {
             float vertexX = quad.positions[i] + x;
@@ -136,8 +139,8 @@ public class ChunkMesher {
             positions.add(vertexX);
             positions.add(vertexY);
             positions.add(vertexZ);
-            texCoords.add(quad.texCoords[i / 3 * 2]);
-            texCoords.add(quad.texCoords[i / 3 * 2 + 1]);
+            texCoords.add(flowX);
+            texCoords.add(flowZ);
             waveWeights.add(vertexY - y);
         }
 
@@ -147,6 +150,22 @@ public class ChunkMesher {
 
     private static float fluidHeight(int level) {
         return (level > 0 ? level : FluidBlock.MAX_LEVEL) / (float) FluidBlock.MAX_LEVEL;
+    }
+
+    private static float[] getFluidFlowDirection(World world, int x, int y, int z, int level) {
+        int[][] directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        int flowX = 1;
+        int flowZ = 0;
+        int highestNeighborLevel = level;
+        for (int[] direction : directions) {
+            int neighborLevel = world.getFluidLevelAt(x + direction[0], y, z + direction[1]);
+            if (neighborLevel > highestNeighborLevel) {
+                highestNeighborLevel = neighborLevel;
+                flowX = -direction[0];
+                flowZ = -direction[1];
+            }
+        }
+        return new float[] {flowX, flowZ};
     }
 
     /**

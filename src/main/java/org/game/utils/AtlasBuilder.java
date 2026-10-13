@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import org.engine.rendering.Texture;
@@ -28,28 +29,33 @@ public class AtlasBuilder {
         return atlasBuilder;
     }
     private AtlasBuilder(String folderPath, int atlasSize, int cellSize) throws IOException {
-        // scan folder for PNGs
         try (DirectoryStream<Path> stream =
-                     Files.newDirectoryStream(Paths.get(folderPath), "*.png")) {
+                     Files.newDirectoryStream(Paths.get(folderPath), AtlasBuilder::isSupportedTexture)) {
             int x = 0, y = 0;
             ByteBuffer atlasBuffer = BufferUtils.createByteBuffer(atlasSize * atlasSize * 4);
 
             for (Path p : stream) {
                 String fileName = p.getFileName().toString();
-                String key = fileName.substring(0, fileName.length() - 4);
+                String key = fileName.substring(0, fileName.lastIndexOf('.'));
 
-                // use your Resource helper to load image
                 int[] w = new int[1], h = new int[1], c = new int[1];
                 ByteBuffer image = Resource.loadImage(p.toString(), w, h, c, 4);
                 if (image == null) continue;
 
                 int width = w[0];
                 int height = h[0];
+                int tileWidth = Math.min(width, cellSize);
+                int tileHeight = Math.min(height, cellSize);
+                if (x + tileWidth > atlasSize || y + tileHeight > atlasSize) {
+                    Resource.freeImage(image);
+                    throw new IOException("Texture atlas is full while adding " + fileName);
+                }
 
-                // copy pixels into atlas buffer
-                for (int row = 0; row < height; row++) {
-                    for (int col = 0; col < width; col++) {
-                        int srcIndex = (row * width + col) * 4;
+                for (int row = 0; row < tileHeight; row++) {
+                    for (int col = 0; col < tileWidth; col++) {
+                        int srcX = Math.min(width - 1, col * width / tileWidth);
+                        int srcY = Math.min(height - 1, row * height / tileHeight);
+                        int srcIndex = (srcY * width + srcX) * 4;
                         int destIndex = ((y + row) * atlasSize + (x + col)) * 4;
                         atlasBuffer.put(destIndex, image.get(srcIndex));
                         atlasBuffer.put(destIndex + 1, image.get(srcIndex + 1));
@@ -60,14 +66,12 @@ public class AtlasBuilder {
 
                 Resource.freeImage(image); // free STB buffer
 
-                // store UVs
                 float u0 = (float) x / atlasSize;
                 float v0 = (float) y / atlasSize;
-                float u1 = (float) (x + width) / atlasSize;
-                float v1 = (float) (y + height) / atlasSize;
+                float u1 = (float) (x + tileWidth) / atlasSize;
+                float v1 = (float) (y + tileHeight) / atlasSize;
                 uvMap.put(key, new float[]{u0, v0, u1, v1});
 
-                // next cell
                 x += cellSize;
                 if (x + cellSize > atlasSize) { x = 0; y += cellSize; }
             }
@@ -84,6 +88,12 @@ public class AtlasBuilder {
 
             atlasTexture = new Texture(texId, atlasSize, atlasSize); // your Texture wrapper
         }
+    }
+
+    private static boolean isSupportedTexture(Path path) {
+        String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
+        return fileName.endsWith(".png") || fileName.endsWith(".jpg")
+                || fileName.endsWith(".jpeg");
     }
 
     public Texture getAtlasTexture() { return atlasTexture; }

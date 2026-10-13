@@ -30,8 +30,6 @@ import static org.lwjgl.opengl.GL11.glPixelStorei;
 import static org.lwjgl.opengl.GL11.glTexImage2D;
 import static org.lwjgl.opengl.GL11.glTexParameteri;
 import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE1;
-import static org.lwjgl.opengl.GL13.glActiveTexture;
 import static org.lwjgl.opengl.GL20.glGetUniformLocation;
 import static org.lwjgl.opengl.GL20.glUniform1f;
 import static org.lwjgl.opengl.GL20.glUniform1i;
@@ -44,7 +42,6 @@ import static org.lwjgl.opengl.GL30.glGenerateMipmap;
 public final class WaterRenderer {
     private final ShaderProgram shader;
     private final Texture waterTexture;
-    private final Texture normalTexture;
     private final int projectionLocation;
     private final int viewLocation;
     private final int modelLocation;
@@ -66,14 +63,9 @@ public final class WaterRenderer {
             throw new IllegalStateException("Water shader failed to link.");
         }
 
-        Texture loadedWaterTexture = null;
         try {
-            loadedWaterTexture = loadTexture("assets/textures/Water 0339.jpg");
-            normalTexture = loadTexture("assets/textures/Water 0339normal.jpg");
-            waterTexture = loadedWaterTexture;
+            waterTexture = loadTexture("assets/textures/Water 0339.jpg");
         } catch (RuntimeException exception) {
-            if (loadedWaterTexture != null)
-                loadedWaterTexture.delete();
             shader.delete();
             throw exception;
         }
@@ -87,7 +79,6 @@ public final class WaterRenderer {
         lightDirectionLocation = glGetUniformLocation(shader.getId(), "uLightDirection");
         waterColorLocation = glGetUniformLocation(shader.getId(), "uWaterColor");
         glUniform1i(glGetUniformLocation(shader.getId(), "uWaterTexture"), 0);
-        glUniform1i(glGetUniformLocation(shader.getId(), "uNormalTexture"), 1);
         shader.stop();
     }
 
@@ -111,7 +102,6 @@ public final class WaterRenderer {
         glUniform3f(waterColorLocation, 0.68f, 0.86f, 0.96f);
 
         waterTexture.bind(GL_TEXTURE0);
-        normalTexture.bind(GL_TEXTURE1);
         for (Mesh mesh : model.getMeshes()) {
             if (mesh instanceof LightedMesh lightedMesh)
                 lightedMesh.sortTranslucentFaces(camera.getViewPosition().x,
@@ -119,15 +109,12 @@ public final class WaterRenderer {
                         position.x, position.y, position.z);
             mesh.draw();
         }
-        Texture.unbind(GL_TEXTURE1);
-        glActiveTexture(GL_TEXTURE0);
         Texture.unbind(GL_TEXTURE0);
         shader.stop();
     }
 
     public void delete() {
         waterTexture.delete();
-        normalTexture.delete();
         shader.delete();
     }
 

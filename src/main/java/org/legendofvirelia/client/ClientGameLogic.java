@@ -61,13 +61,14 @@ public class ClientGameLogic implements ClientSide {
     private ColorRect[] hotbarSlots;
     private ColorRect[] hotbarSwatches;
     private ColorRect[] selectedSlotBorder;
-    private final int[] hotbarBlockIds = new int[4];
-    private final String[] hotbarBlockNames = {"DIRT", "DIRT2", "TORCH", "WATER"};
+    private final int[] hotbarBlockIds = new int[5];
+    private final String[] hotbarBlockNames = {"DIRT", "DIRT2", "TORCH", "WATER", "ROCK"};
     private final float[][] hotbarColors = {
             {0.45f, 0.29f, 0.16f},
             {0.42f, 0.43f, 0.46f},
             {0.95f, 0.58f, 0.12f},
-            {0.10f, 0.58f, 0.78f}
+            {0.10f, 0.58f, 0.78f},
+            {0.48f, 0.49f, 0.52f}
     };
     private int selectedHotbarIndex;
     private int hudWidth;
@@ -124,6 +125,7 @@ public class ClientGameLogic implements ClientSide {
         BlockRegistry.register("dirt", Blocks.DIRT.get());
         BlockRegistry.register("torch", Blocks.Torch.get());
         BlockRegistry.register("dirt2", Blocks.DIRT2.get());
+        BlockRegistry.register("rock", Blocks.ROCK.get());
         Block water = Blocks.WATER.get();
         water.setTransparent(true);
         BlockRegistry.register("water", water);
@@ -131,6 +133,7 @@ public class ClientGameLogic implements ClientSide {
         hotbarBlockIds[1] = BlockRegistry.getId("dirt2");
         hotbarBlockIds[2] = BlockRegistry.getId("torch");
         hotbarBlockIds[3] = BlockRegistry.getId("water");
+        hotbarBlockIds[4] = BlockRegistry.getId("rock");
         selectedBlockId = hotbarBlockIds[selectedHotbarIndex];
         createHud();
 
@@ -167,6 +170,7 @@ public class ClientGameLogic implements ClientSide {
         if (Input.isKeyPressed(Input.KEY_2)) selectHotbarSlot(1);
         if (Input.isKeyPressed(Input.KEY_3)) selectHotbarSlot(2);
         if (Input.isKeyPressed(Input.KEY_4)) selectHotbarSlot(3);
+        if (Input.isKeyPressed(Input.KEY_5)) selectHotbarSlot(4);
         handleBuildingInput();
     }
 
@@ -198,7 +202,7 @@ public class ClientGameLogic implements ClientSide {
             selectedSlotBorder[i] = new ColorRect(0, 0, 48, 3, 1f, 0.82f, 0.25f, 1f);
             hudElements.add(selectedSlotBorder[i]);
         }
-        hotbarLabel = new Label(0, 0, 500, 22, "", 14);
+        hotbarLabel = new Label(0, 0, 700, 22, "", 14);
         hudElements.add(hotbarLabel);
         layoutHud(window.getWidth(), window.getHeight());
         updateHotbarLabel();
@@ -216,7 +220,7 @@ public class ClientGameLogic implements ClientSide {
     private void updateHotbarLabel() {
         if (hotbarLabel != null) {
             hotbarLabel.setText("SELECTED: " + hotbarBlockNames[selectedHotbarIndex]
-                    + "     1 DIRT  2 DIRT2  3 TORCH  4 WATER");
+                    + "     1 DIRT  2 DIRT2  3 TORCH  4 WATER  5 ROCK");
         }
     }
 
@@ -246,7 +250,7 @@ public class ClientGameLogic implements ClientSide {
         }
 
         updateSelectedSlotBorder(firstSlotX, slotY, slotWidth, slotGap);
-        hotbarLabel.setPosition(centerX - 250, slotY - 25);
+        hotbarLabel.setPosition(centerX - 350, slotY - 25);
     }
 
     private void updateSelectedSlotBorder() {

@@ -84,7 +84,7 @@ public class WorldGenerator {
                         } else if (y >= surfaceY - SURFACE_BUFFER) {
                             blockId = biome.fillerBlock;
                         } else {
-                            blockId = BlockRegistry.getId("dirt2");
+                            blockId = BlockRegistry.getId("rock");
                         }
                         chunk.setBlock(x, y, z, blockId);
                     } else {

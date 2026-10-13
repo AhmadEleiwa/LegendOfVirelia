@@ -37,6 +37,7 @@ public class Input {
     public static final int KEY_2 = GLFW.GLFW_KEY_2;
     public static final int KEY_3 = GLFW.GLFW_KEY_3;
     public static final int KEY_4 = GLFW.GLFW_KEY_4;
+    public static final int KEY_5 = GLFW.GLFW_KEY_5;
 
     public static final int KEY_ESCAPE = GLFW.GLFW_KEY_ESCAPE;
     public static final int KEY_SPACE = GLFW.GLFW_KEY_SPACE;

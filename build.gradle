@@ -158,9 +158,6 @@ shadowJar {
     }
 }
 
-tasks.withType(JavaExec) {
-    systemProperty "java.library.path", configurations.runtimeClasspath.find { it.name.contains(lwjglNatives) }
-}
 // Register a copy task
 tasks.register("copyLibs", Copy) {
     from(configurations.runtimeClasspath)
@@ -185,7 +182,27 @@ tasks.register('copyAssets', Copy) {
     into("$buildDir/assets" )
 }
 tasks.register('copyLauncher', Copy) {
-    from('launcher')          // the folder containing the file
-    into("$buildDir/launcher")         // destination folder
+    dependsOn("launcherJar")
+    from(tasks.named("launcherJar"))
+    into("$buildDir/launcher")
 }
 
+tasks.register("compileLauncher", JavaCompile) {
+    source = fileTree("launcher/src/main/java") {
+        include "**/*.java"
+    }
+    classpath = files()
+    destinationDirectory = layout.buildDirectory.dir("launcher/classes")
+    options.release = 17
+    options.encoding = "UTF-8"
+}
+
+tasks.register("launcherJar", Jar) {
+    dependsOn("compileLauncher")
+    from(tasks.named("compileLauncher").map { it.destinationDirectory })
+    archiveFileName = "Launcher-1.0-SNAPSHOT-all.jar"
+    destinationDirectory = file("launcher")
+    manifest {
+        attributes("Main-Class": "org.legendofvirelia.launcher.Launcher")
+    }
+}
