@@ -20,7 +20,7 @@ public final class PlayerPhysics {
     private static final float MOVE_ACCELERATION = 22.0f;
     private static final float MOVE_DECELERATION = 28.0f;
     private static final float GRAVITY = 19.0f;
-    private static final float JUMP_SPEED = 18.2f;
+    private static final float JUMP_SPEED = 8.2f;
     private static final float TERMINAL_SPEED = 50.0f;
     private static final float COLLISION_EPSILON = 0.0001f;
 
